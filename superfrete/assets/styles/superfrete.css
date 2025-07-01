@@ -1,0 +1,364 @@
+.superfrete-popup {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.superfrete-popup-content {
+    background: white;
+    width: 50%;
+    margin: 10% auto;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.superfrete-popup-close {
+    float: right;
+    font-size: 24px;
+    cursor: pointer;
+}
+#superfrete-calculator {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    max-width: 350px;
+    margin: 20px auto;
+    font-family: Arial, sans-serif;
+    display: block;
+    margin-left: 0;
+}
+
+#superfrete-calculator label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-bottom: 5px;
+}
+
+#superfrete-calculator input[type="text"] {
+    width: -webkit-fill-available;
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    outline: none;
+    transition: border 0.3s ease-in-out;
+}
+
+#superfrete-calculator input[type="text"]:focus {
+    border-color: #0fae79;
+}
+
+#calculate-shipping {
+    font-weight: 700;
+    background: #0fae79;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    width: 100%;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+}
+
+#calculate-shipping:hover {
+    background: #EA961F;
+}
+
+#superfrete-shipping-result {
+    margin-top: 15px;
+}
+
+#superfrete-shipping-result h4 {
+    font-size: 16px;
+    font-weight: bold;
+    color: #0fae79;
+    text-transform: uppercase;
+}
+
+#superfrete-shipping-result ul {
+    list-style: none;
+    padding: 0;
+}
+
+#superfrete-shipping-result li {
+    background: #ffffff;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 8px;
+    border-left: 5px solid #0fae79;
+    font-size: 14px;
+    color: #555;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.superfrete-alert ul li {
+    background: #ffffff;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 8px;
+    border-left: 5px solid #0fae79;
+    font-size: 14px;
+    color: #555;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.superfrete-alert ul {
+    list-style: none;
+    padding: 0;
+}
+#superfrete-shipping-result li strong {
+    color: #000;
+}
+
+#superfrete-shipping-result img {
+    display: block;
+    margin-top: 5px;
+}
+/* Estilos do Popup */
+.superfrete-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.5); /* Fundo escuro translúcido */
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.superfrete-popup-content {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    font-family: Arial, sans-serif;
+    position: relative;
+}
+
+.superfrete-popup-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #555;
+    cursor: pointer;
+    transition: color 0.3s ease-in-out;
+}
+
+.superfrete-popup-close:hover {
+    color: #EA961F;
+}
+
+.superfrete-popup h3 {
+    font-size: 18px;
+    font-weight: bold;
+    color: #0fae79;
+    margin-bottom: 10px;
+}
+
+.superfrete-popup p {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 15px;
+}
+
+.superfrete-popup form {
+    text-align: left;
+}
+
+.superfrete-popup label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.superfrete-popup input[type="text"] {
+    width: calc(100% - 20px);
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    outline: none;
+    transition: border 0.3s ease-in-out;
+}
+
+.superfrete-popup input[type="text"]:focus {
+    border-color: #0fae79;
+}
+
+.superfrete-popup button {
+    font-weight: 700;
+    background: #0fae79;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    width: 100%;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+}
+
+.superfrete-popup button:hover {
+    background: #EA961F;
+}
+#super-frete-shipping-calculator{
+    position: relative;
+}
+.superfrete-processing #super-frete-shipping-calculator:after{
+    content:url(../img/loading-3.gif);
+    position:absolute;
+    width:100%;
+    height:100%;
+    background-size: auto;
+    z-index:100;
+    top:0px;
+    background-color: #ffffff8c;
+    display: flex;
+    align-content: center;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #021e0e2e;
+    border-radius: 5px;
+}
+a.button.superfrete-shipping-calculator-button {
+    width: 100%;
+    padding: 10px 0px;
+}
+
+form.superfrete-woocommerce-shipping-calculator {
+    position: relative;
+}
+/* Estilização da mensagem de alerta */
+.superfrete-alert {
+    background: #01714c3d;
+    color: #333;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Container principal do cálculo de frete */
+.superfrete-container {
+        position: relative;
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    margin: 20px auto;
+    font-family: Arial, sans-serif;
+}
+
+/* Botão para selecionar o endereço */
+.superfrete-shipping-calculator-button {
+    display: block;
+    background: #0fae79;
+    color: #fff;
+    text-align: center;
+    font-size: 16px;
+    padding: 12px;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background 0.3s ease-in-out;
+    font-weight: bold;
+}
+
+.superfrete-shipping-calculator-button:hover {
+    background: #EA961F;
+}
+
+/* Seção do formulário interno */
+.superfrete-shipping-calculator-form {
+    display: none;
+    margin-top: 15px;
+    padding: 15px;
+    background: white;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Mensagem de erro */
+.superfrete-error {
+    color: #d9534f;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* Estilização dos campos de entrada */
+.superfrete-woocommerce-shipping-calculator select,
+.superfrete-woocommerce-shipping-calculator input {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    outline: none;
+    transition: border 0.3s ease-in-out;
+}
+
+.superfrete-woocommerce-shipping-calculator input:focus,
+.superfrete-woocommerce-shipping-calculator select:focus {
+    border-color: #0fae79;
+}
+
+/* Botão de calcular */
+.superfrete-update-address-button {
+    font-weight: 700;
+    background: #0fae79;
+    color: #fff;
+    border: none;
+    padding: 12px;
+    width: 100%;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+    margin-top: 10px;
+}
+
+.superfrete-update-address-button:hover {
+    background: #EA961F;
+}
+
+/* Responsividade */
+@media (max-width: 480px) {
+    .superfrete-container {
+        max-width: 90%;
+    }
+
+    .superfrete-shipping-calculator-button,
+    .superfrete-update-address-button {
+        font-size: 14px;
+        padding: 10px;
+    }
+}
+
