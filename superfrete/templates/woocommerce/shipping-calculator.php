@@ -15,112 +15,47 @@
  * @version 4.0.0
  */
 defined('ABSPATH') || exit;
-$closed = get_option('superfrete_default_form_display', 'closed');
-if ($closed == 'open') {
-    $style = '';
-} else {
-    $style = ' display:none; ';
+?>
+<?php
+// Allow themes to add custom classes
+$calculator_classes = apply_filters('superfrete_calculator_classes', array('superfrete-calculator-wrapper'));
+$calculator_attributes = apply_filters('superfrete_calculator_attributes', array());
+
+// Build attributes string
+$attributes_string = '';
+foreach ($calculator_attributes as $key => $value) {
+    $attributes_string .= sprintf(' %s="%s"', esc_attr($key), esc_attr($value));
 }
 ?>
-<div id="super-frete-shipping-calculator" >
-    <div class="superfrete-container">
-        <?php do_action('superfrete_before_calculate_button'); ?>
-        <form class="superfrete-woocommerce-shipping-calculator" action="<?php echo esc_url( admin_url('admin-ajax.php') ); ?>" method="post" onsubmit="return false;">
+<div id="super-frete-shipping-calculator" class="<?php echo esc_attr(implode(' ', $calculator_classes)); ?>"<?php echo $attributes_string; ?>>
+    <?php do_action('superfrete_before_calculate_form'); ?>
+    
+    <!-- CEP Input Section - Always Visible -->
+    <div class="superfrete-input-section">
+        <form class="superfrete-woocommerce-shipping-calculator" action="<?php echo esc_url(admin_url('admin-ajax.php')); ?>" method="post" onsubmit="return false;">
+            <div id="superfrete-error" class="superfrete-error"></div>
+            
+            <?php // Hidden fields for Brazil ?>
+            <input type="hidden" name="calc_shipping_country" id="calc_shipping_country" value="BR">
+            <input type="hidden" name="calc_shipping_state" id="calc_shipping_state" value="">
+            <input type="hidden" name="calc_shipping_city" id="calc_shipping_city" value="">
+            
+            <?php // CEP input field - always visible ?>
+            <div class="form-row form-row-wide" id="calc_shipping_postcode_field">
+                <input type="text" class="input-text" value="<?php echo esc_attr(WC()->customer->get_shipping_postcode()); ?>" 
+                       placeholder="<?php esc_attr_e('Digite seu CEP (00000-000)', 'superfrete'); ?>" 
+                       name="calc_shipping_postcode" id="calc_shipping_postcode" />
+            </div>
 
-            <?php printf('<a href="/" class="button superfrete-shipping-calculator-button" rel="nofollow">%s</a>', esc_html($button_text)); ?>
-
-            <?php do_action('superfrete_after_calculate_button'); ?>
-
-            <section class="superfrete-shipping-calculator-form" style="<?php echo esc_attr( $style ); ?>">
-                <?php do_action('superfrete_before_calculate_form'); ?>
-                <div id="superfrete-error" class="superfrete-error"></div>
-                <?php if (apply_filters('woocommerce_shipping_calculator_enable_country', true)) : ?>
-                    <?php
-                    $countries = WC()->countries->get_shipping_countries();
-                    $remove_country_field = get_option('superfrete_remove_country', 0);
-                    ?>
-                    <?php
-                    if (count($countries) == 1 && !empty($remove_country_field)) {
-                        $first_country_key = array_key_first($countries);
-                        ?>	
-                        <input type="hidden" name="calc_shipping_country" id="calc_shipping_country" class="country_to_state country_select" rel="calc_shipping_state" value="<?php echo esc_attr($first_country_key); ?>">
-                    <?php } else { ?>
-                        <p class="form-row form-row-wide" id="calc_shipping_country_field">
-                            <select name="calc_shipping_country" id="calc_shipping_country" class="country_to_state country_select" rel="calc_shipping_state">
-                                <option value="default"><?php esc_html_e('Select a country / region&hellip;', 'woocommerce'); ?></option>
-                                <?php
-                                foreach ($countries as $key => $value) {
-                                    echo '<option value="' . esc_attr($key) . '"' . selected(WC()->customer->get_shipping_country(), esc_attr($key), false) . '>' . esc_html($value) . '</option>';
-                                }
-                                ?>
-                            </select>
-                        </p>
-                    <?php } ?>
-
-                <?php endif; ?>
-
-                <?php
-                $remove_state = get_option('superfrete_remove_state', 0);
-                if (apply_filters('woocommerce_shipping_calculator_enable_state', true) && empty($remove_state)) :
-                    ?>
-                    <p class="form-row form-row-wide" id="calc_shipping_state_field">
-                        <?php
-                        $current_cc = "BR";
-                        $current_r = WC()->customer->get_shipping_state();
-                        $states = WC()->countries->get_states($current_cc);
-
-                        if (is_array($states) && empty($states)) {
-                            ?>
-                            <input type="hidden" name="calc_shipping_state" id="calc_shipping_state" placeholder="<?php esc_attr_e('State / County', 'woocommerce'); ?>" />
-                            <?php
-                        } elseif (is_array($states)) {
-                            ?>
-                            <span>
-                                <select name="calc_shipping_state" class="state_select" id="calc_shipping_state" data-placeholder="<?php esc_attr_e('State / County', 'woocommerce'); ?>">
-                                    <option value=""><?php esc_html_e('Select an option&hellip;', 'woocommerce'); ?></option>
-                                    <?php
-                                    foreach ($states as $ckey => $cvalue) {
-                                        echo '<option value="' . esc_attr($ckey) . '" ' . selected($current_r, $ckey, false) . '>' . esc_html($cvalue) . '</option>';
-                                    }
-                                    ?>
-                                </select>
-                            </span>
-                            <?php
-                        } else {
-                            ?>
-                            <input type="text" class="input-text" value="<?php echo esc_attr($current_r); ?>" placeholder="<?php esc_attr_e('State / County', 'woocommerce'); ?>" name="calc_shipping_state" id="calc_shipping_state" />
-                            <?php
-                        }
-                        ?>
-                    </p>
-                <?php endif; ?>
-
-                <?php
-                $remove_city = get_option('superfrete_remove_city', 0);
-                if (apply_filters('woocommerce_shipping_calculator_enable_city', true) && empty($remove_city)) :
-                    ?>
-                    <p class="form-row form-row-wide" id="calc_shipping_city_field">
-                        <input type="text" class="input-text" value="<?php echo esc_attr(WC()->customer->get_shipping_city()); ?>" placeholder="<?php esc_attr_e('City', 'woocommerce'); ?>" name="calc_shipping_city" id="calc_shipping_city" />
-                    </p>
-                <?php endif; ?>
-
-                <?php
-                $remove_postcode = get_option('superfrete_remove_postcode', 0);
-                if (apply_filters('woocommerce_shipping_calculator_enable_postcode', true) && empty($remove_postcode)) :
-                    ?>
-                    <p class="form-row form-row-wide" id="calc_shipping_postcode_field">
-                        <input type="text" class="input-text" value="<?php echo esc_attr(WC()->customer->get_shipping_postcode()); ?>" placeholder="<?php esc_attr_e('Postcode / ZIP', 'woocommerce'); ?>" name="calc_shipping_postcode" id="calc_shipping_postcode" />
-                    </p>
-                <?php endif; ?>
-
-                <p>
-                    <button type="submit" name="calc_shipping" value="1" class="button superfrete-update-address-button">
-                        <?php echo esc_html($update_address_btn_text); ?>
-                    </button>
-                </p>
-                <?php wp_nonce_field('superfrete_nonce', 'superfrete_nonce'); ?>
-                <?php do_action('superfrete_after_calculate_form'); ?>
-            </section>
+            <div class="form-row" id="superfrete-submit-container" style="display: none;">
+                <button type="submit" name="calc_shipping" value="1" class="button superfrete-update-address-button">
+                    <?php echo esc_html($update_address_btn_text); ?>
+                </button>
+            </div>
+            
+            <?php wp_nonce_field('superfrete_nonce', 'superfrete_nonce'); ?>
+            <?php do_action('superfrete_after_calculate_form'); ?>
+            
             <?php if (!empty($product_id)): ?>
                 <input type="hidden" name="product_id" value="<?php echo esc_attr($product_id); ?>">
                 <input type="hidden" name="quantity" value="1">
@@ -133,5 +68,11 @@ if ($closed == 'open') {
         </form>
     </div>
 
-    <div id="superfrete-alert-container" class="superfrete-alert-container"></div>
+    <!-- Status Message Section -->
+    <div id="superfrete-status-message" class="superfrete-status-message">
+        <p><?php esc_html_e('💡 Digite seu CEP para calcular automaticamente o frete e prazo de entrega', 'superfrete'); ?></p>
+    </div>
+    
+    <!-- Results Section -->
+    <div id="superfrete-results-container" class="superfrete-results-container" style="display:none;"></div>
 </div>

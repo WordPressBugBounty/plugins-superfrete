@@ -23,6 +23,32 @@ class SuperFrete_OrderActions
     }
 
     /**
+     * Helper method to safely get order meta data (HPOS compatible)
+     */
+    private function get_order_meta($order_id, $meta_key, $single = true)
+    {
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return $single ? '' : [];
+        }
+        return $order->get_meta($meta_key, $single);
+    }
+
+    /**
+     * Helper method to safely update order meta data (HPOS compatible)
+     */
+    private function update_order_meta($order_id, $meta_key, $meta_value)
+    {
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return false;
+        }
+        $order->update_meta_data($meta_key, $meta_value);
+        $order->save();
+        return true;
+    }
+
+    /**
      * Adiciona a metabox na lateral da tela de edição do pedido
      */
     public function add_superfrete_metabox()
@@ -113,7 +139,7 @@ class SuperFrete_OrderActions
         }
 
         $order_id = intval($_POST['order_id']);
-        $etiqueta_id = get_post_meta($order_id, '_superfrete_id', true);
+        $etiqueta_id = $this->get_order_meta($order_id, '_superfrete_id', true);
 
         if (!$etiqueta_id) {
             echo '<p>' . esc_html__('Status da Etiqueta: ', 'superfrete') . ' <strong>' . esc_html__('Erro ao Enviar, Verifique o Log', 'superfrete') . '</strong></p>';
@@ -125,7 +151,7 @@ class SuperFrete_OrderActions
         $superfrete_status = $this->get_superfrete_data($etiqueta_id)['status'];
         $superfrete_tracking = $this->get_superfrete_data($etiqueta_id)['tracking'];
 
-        $valor_frete = floatval(get_post_meta($order_id, '_superfrete_price', true));
+        $valor_frete = floatval($this->get_order_meta($order_id, '_superfrete_price', true));
 
         echo "<p><strong>" . esc_html__('Saldo na SuperFrete:', 'superfrete') . "</strong> R$ " . esc_html(number_format($saldo, 2, ',', '.')) . "</p>";
         echo "<p><strong>" . esc_html__('Valor da Etiqueta:', 'superfrete') . "</strong> R$ " . esc_html(number_format($valor_frete, 2, ',', '.')) . "</p>";
@@ -135,10 +161,12 @@ class SuperFrete_OrderActions
         } elseif ($superfrete_status == 'pending') {
 
             echo '<p>' . esc_html__('Status da Etiqueta: ', 'superfrete') . ' <strong>' . esc_html__('Pendente Pagamento', 'superfrete') . '</strong></p>';
-            $disabled = ($saldo < $valor_frete) ? 'disabled' : '';
-            echo '<a href="https://web.superfrete.com/#/account/credits" class="button button-primary">' . esc_html__('Adicionar Saldo', 'superfrete') . '</a>';
             if ($saldo < $valor_frete) {
+                $web_url = $this->get_superfrete_web_url();
+                echo '<a href="' . esc_url($web_url . '/#/account/credits') . '" target="_blank" class="button button-primary">' . esc_html__('Adicionar Saldo', 'superfrete') . '</a>';
                 echo '<p style="color: red;">' . esc_html__('Saldo insuficiente para pagamento da etiqueta.', 'superfrete') . '</p>';
+            } else {
+                echo '<a href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=superfrete_pay_ticket&order_id=' . $order_id), 'superfrete_pay_ticket')) . '" class="button button-primary">' . esc_html__('Pagar Etiqueta', 'superfrete') . '</a>';
             }
         } else if ($superfrete_status == 'canceled') {
             echo '<p>' . esc_html__('Status da Etiqueta: ', 'superfrete') . ' <strong>' . esc_html__('Cancelada', 'superfrete') . '</strong></p>';
@@ -147,10 +175,36 @@ class SuperFrete_OrderActions
 
         } else if ($superfrete_status == 'posted') {
             echo '<p>' . esc_html__('Status do Pedido: ', 'superfrete') . ' <strong>' . esc_html__('Postado', 'superfrete') . '</strong></p>';
-            echo '<a target="_blank" href="https://rastreio.superfrete.com/#/tracking/' . $superfrete_tracking . '"  class="button button-primary">' . esc_html__('Rastrear Pedido', 'superfrete') . '</a>';
+            
+            // Show webhook tracking info if available
+            $tracking_code = $this->get_order_meta($order_id, '_superfrete_tracking_code', true);
+            $tracking_url = $this->get_order_meta($order_id, '_superfrete_tracking_url', true);
+            $posted_at = $this->get_order_meta($order_id, '_superfrete_posted_at', true);
+            
+            if ($tracking_code) {
+                echo '<p><strong>' . esc_html__('Código de Rastreamento:', 'superfrete') . '</strong> ' . esc_html($tracking_code) . '</p>';
+            }
+            if ($posted_at) {
+                echo '<p><strong>' . esc_html__('Data de Postagem:', 'superfrete') . '</strong> ' . esc_html(wp_date('d/m/Y H:i', strtotime($posted_at))) . '</p>';
+            }
+            
+            $tracking_base_url = $this->get_superfrete_tracking_url();
+            $tracking_link = $tracking_url ?: "{$tracking_base_url}/#/tracking/{$superfrete_tracking}";
+            echo '<a href="' . esc_url($tracking_link) . '" target="_blank" class="button button-primary">' . esc_html__('Rastrear Pedido', 'superfrete') . '</a>';
 
         } else if ($superfrete_status == 'delivered') {
             echo '<p>' . esc_html__('Status do Pedido: ', 'superfrete') . ' <strong>' . esc_html__('Entregue', 'superfrete') . '</strong></p>';
+            
+            // Show delivery info if available
+            $delivered_at = $this->get_order_meta($order_id, '_superfrete_delivered_at', true);
+            $tracking_code = $this->get_order_meta($order_id, '_superfrete_tracking_code', true);
+            
+            if ($delivered_at) {
+                echo '<p><strong>' . esc_html__('Data de Entrega:', 'superfrete') . '</strong> ' . esc_html(wp_date('d/m/Y H:i', strtotime($delivered_at))) . '</p>';
+            }
+            if ($tracking_code) {
+                echo '<p><strong>' . esc_html__('Código de Rastreamento:', 'superfrete') . '</strong> ' . esc_html($tracking_code) . '</p>';
+            }
 
         } else {
 
@@ -171,6 +225,24 @@ class SuperFrete_OrderActions
         return isset($response['balance']) ? floatval($response['balance']) : 0;
     }
 
+    /**
+     * Get the correct web URL based on environment
+     */
+    private function get_superfrete_web_url()
+    {
+        $use_dev_env = get_option('superfrete_sandbox_mode') === 'yes';
+        return $use_dev_env ? 'https://sandbox.superfrete.com' : 'https://web.superfrete.com';
+    }
+
+    /**
+     * Get the correct tracking URL based on environment
+     */
+    private function get_superfrete_tracking_url()
+    {
+        $use_dev_env = get_option('superfrete_sandbox_mode') === 'yes';
+        return $use_dev_env ? 'https://sandbox.superfrete.com' : 'https://rastreio.superfrete.com';
+    }
+
     private function get_superfrete_data($id)
     {
         $request = new Request();
@@ -183,7 +255,7 @@ class SuperFrete_OrderActions
      */
     private function get_ticket_superfrete($order_id)
     {
-        $etiqueta_id = get_post_meta($order_id, '_superfrete_id', true);
+        $etiqueta_id = $this->get_order_meta($order_id, '_superfrete_id', true);
         if (!$etiqueta_id) {
             return '';
         }
@@ -192,7 +264,7 @@ class SuperFrete_OrderActions
         $response = $request->call_superfrete_api('/api/v0/tag/print', 'POST', ['orders' => [$etiqueta_id]], true);
 
         if (isset($response['url'])) {
-            update_post_meta($order_id, '_superfrete_status', 'success');
+            $this->update_order_meta($order_id, '_superfrete_status', 'success');
             return $response['url'];
         }
 
@@ -221,10 +293,10 @@ class SuperFrete_OrderActions
         $response = $controller->send_order_to_superfrete($order_id);
 
         if (isset($response['status']) && $response['status'] === 'pending') {
-            update_post_meta($order_id, '_superfrete_status', 'pending-payment');
+            $this->update_order_meta($order_id, '_superfrete_status', 'pending-payment');
             Logger::log('SuperFrete', "Pedido #{$order_id} enviado com sucesso.");
         } else {
-            update_post_meta($order_id, '_superfrete_status', 'erro');
+            $this->update_order_meta($order_id, '_superfrete_status', 'erro');
             Logger::log('SuperFrete', "Erro ao reenviar pedido #{$order_id}.");
         }
 
@@ -250,23 +322,23 @@ class SuperFrete_OrderActions
 
         Logger::log('SuperFrete', "Pagando Etiqueta #{$order_id}...");
 
-        $etiqueta_id = get_post_meta($order_id, '_superfrete_id', true);
+        $etiqueta_id = $this->get_order_meta($order_id, '_superfrete_id', true);
 
         $request = new Request();
         $response = $request->call_superfrete_api('/api/v0/checkout', 'POST', ['orders' => [$etiqueta_id]], true);
 
         if ($response == 409) {
-            update_post_meta($order_id, '_superfrete_status', 'success');
+            $this->update_order_meta($order_id, '_superfrete_status', 'success');
             wp_redirect(admin_url('post.php?post=' . $order_id . '&action=edit'));
             return;
         }
 
         if (isset($response['status']) && $response['status'] === 'pending') {
             Logger::log('SuperFrete', "Etiqueta Paga #{$order_id}...");
-            update_post_meta($order_id, '_superfrete_status', 'pending-payment');
+            $this->update_order_meta($order_id, '_superfrete_status', 'pending-payment');
             Logger::log('SuperFrete', "Pedido #{$order_id} enviado com sucesso.");
         } else {
-            update_post_meta($order_id, '_superfrete_status', 'aguardando');
+            $this->update_order_meta($order_id, '_superfrete_status', 'aguardando');
 
             Logger::log('SuperFrete', "Erro ao tentar pagar o ticket do pedido #{$order_id}.");
         }

@@ -1,6 +1,17 @@
 (function ($) {
 	'use strict';
 
+	// Polyfill to get first array key in old browsers
+	if (!Array.prototype.hasOwnProperty('flat')) {
+		Object.defineProperty(Array.prototype, 'flat', {
+			value: function (depth = 1) {
+				return this.reduce(function (flat, toFlatten) {
+					return flat.concat((Array.isArray(toFlatten) && (depth > 1)) ? toFlatten.flat(depth - 1) : toFlatten);
+				}, []);
+			}
+		});
+	}
+
 	function managingCalculator() {
 		this.init = function () {
 			var parent = this;
@@ -25,16 +36,35 @@
 			 */
 			this.variationChange();
 
-			
+			// Clear empty alert container on page load
+			jQuery(".superfrete-alert-container:empty").hide();
+
+			// Initialize CEP input masking and auto-submit
+			this.initCEPMasking();
+
+			// No need for recalculate button handler - form is always visible
+			// CEP input will auto-recalculate when changed
 		}
 
 		this.cal_init = function(){
-			this.calculatorOpen();
 			this.submitDetect();
-			if(!window?.superfrete_autoloading_done){
-				this.onloadShippingMethod(true);
-			}
 			this.autoSelectCountry();
+			
+			// Check if CEP is pre-populated and calculate automatically
+			var cepInput = jQuery('#calc_shipping_postcode');
+			if (cepInput.length > 0) {
+				var cepValue = cepInput.val().replace(/\D/g, '');
+				if (cepValue.length === 8) {
+					// CEP is pre-populated with valid value, calculate freight
+					var parent = this;
+					// Store the pre-populated CEP to prevent duplicate calculations
+					cepInput.data('last-calculated-cep', cepValue);
+					setTimeout(function() {
+						jQuery("#superfrete-status-message p").text('🔄 Calculando frete automaticamente...');
+						parent.onloadShippingMethod();
+					}, 500); // Small delay to ensure page is fully loaded
+				}
+			}
 		}
 
 		this.loadCountry = function(){
@@ -85,7 +115,6 @@
 							});
 						}else{
 							parent.showCalculator();
-							window.superfrete_autoloading_done = 1;
 							parent.setVariation(data);
 							parent.noVariationSelectedMessage(false);
 						}
@@ -113,11 +142,11 @@
 		}
 
 		this.hideCalculator = function () {
-			jQuery(".superfrete-container").fadeOut();
+			// Calculator is always visible now, no need to hide
 		}
 
 		this.showCalculator = function () {
-			jQuery(".superfrete-container").fadeIn();
+			// Calculator is always visible now, no need to show
 		}
 
 		this.setVariation = function (data) {
@@ -127,20 +156,13 @@
 				var var_id = data.variation_id;
 			}
 			jQuery(".superfrete-woocommerce-shipping-calculator input[name='variation_id']").val(var_id);
-			this.onloadShippingMethod(true);
+			// REMOVED: Automatic calculation on variation change
+			// Only calculate when user explicitly requests it
 		}
 
 		this.submitDetect = function () {
 			var parent = this;
 			jQuery(document).on("submit", "form.superfrete-woocommerce-shipping-calculator", { parent: parent }, parent.shipping_calculator_submit);
-		}
-
-		this.calculatorOpen = function () {
-			jQuery(document).on('click', '.superfrete-shipping-calculator-button', function (e) {
-				e.preventDefault();
-				jQuery('.superfrete-shipping-calculator-form').toggle();
-				jQuery(document).trigger('superfrete_calculator_button_clicker');
-			});
 		}
 
 		this.shipping_calculator_submit = function (t) {
@@ -163,7 +185,7 @@
 
 			if(this.form_present() == false) return;
 			
-			var e = jQuery('form.superfrete-woocommerce-shipping-calculator:visible').first();
+			var e = jQuery('form.superfrete-woocommerce-shipping-calculator').first();
 			var parent = this;
 			if (jQuery("#superfrete-variation-id").length && jQuery("#superfrete-variation-id").val() == 0) {
 
@@ -187,20 +209,104 @@
 			/**
 			 * with this one ajax request is reduced when auto loading is set to off
 			 */
-			
-			
-
 			jQuery.ajax({
 				type: e.attr("method"),
 				url: superfrete_setting.wc_ajax_url.toString().replace('%%endpoint%%', action),
 				data: e.serialize() + auto_load_variable,
 				dataType: "json",
 				success: function (t) {					
+					// Output performance logs to console if available
+					if (t.performance_log) {
+						console.group("SuperFrete Performance Logs");
+						console.log("Total execution time: " + t.performance_log.total_time);
 						
+						// Sort steps by execution time (descending)
+						var steps = [];
+						for (var step in t.performance_log.steps) {
+							steps.push({
+								name: step,
+								time: parseFloat(t.performance_log.steps[step])
+							});
+						}
+						
+						steps.sort(function(a, b) {
+							return b.time - a.time;
+						});
+						
+						console.table(steps);
+						
+						// Show shipping method timings if available
+						if (t.performance_log.method_times) {
+							console.group("Shipping Method Timings");
+							
+							var methodTimes = [];
+							for (var method in t.performance_log.method_times) {
+								methodTimes.push({
+									method: method,
+									time: parseFloat(t.performance_log.method_times[method])
+								});
+							}
+							
+							methodTimes.sort(function(a, b) {
+								return b.time - a.time;
+							});
+							
+							console.table(methodTimes);
+							console.groupEnd();
+						}
+						
+						// Show HTTP API stats if available
+						if (t.performance_log.http_api) {
+							console.group("HTTP API Requests");
+							console.log("Total requests: " + t.performance_log.http_api.total_requests);
+							console.log("Total time: " + t.performance_log.http_api.total_time);
+							console.log("Average time: " + t.performance_log.http_api.average_time);
+							
+							if (t.performance_log.http_api.slow_requests) {
+								console.group("Slow Requests (>500ms)");
+								console.table(t.performance_log.http_api.slow_requests);
+								console.groupEnd();
+							}
+							
+							console.groupEnd();
+						}
+						
+						// Show shipping methods info
+						if (t.performance_log.shipping_methods) {
+							console.group("Shipping Methods");
+							console.table(t.performance_log.shipping_methods);
+							console.groupEnd();
+						}
+						
+						// Show slow methods if any
+						if (t.performance_log.slow_methods) {
+							console.group("⚠️ Slow Shipping Methods");
+							console.table(t.performance_log.slow_methods);
+							console.groupEnd();
+						}
+						
+						console.groupEnd();
+					}
 					
+					// Keep form visible - no need to hide/show anything
 
-					jQuery("#superfrete-alert-container, .superfrete-alert-container").html(t.shipping_methods);
-					jQuery("#superfrete-error, .superfrete-error").html(t.error);
+					// Update the shipping methods display in new results container
+					if (t.shipping_methods && t.shipping_methods.trim() !== '') {
+						jQuery("#superfrete-results-container").html(t.shipping_methods).show();
+						jQuery("#superfrete-status-message").hide(); // Hide status when results are shown
+					} else {
+						jQuery("#superfrete-results-container").html('').hide();
+						jQuery("#superfrete-status-message p").text('❌ Nenhum método de envio encontrado para este CEP');
+						jQuery("#superfrete-status-message").show();
+					}
+					
+					// Display any errors
+					if (t.error && t.error.trim() !== '') {
+						jQuery("#superfrete-error, .superfrete-error").html(t.error);
+					} else {
+						jQuery("#superfrete-error, .superfrete-error").html('');
+					}
+					
 					if(jQuery('form.variations_form').length != 0){
 						var product_id = jQuery('input[name="product_id"]', jQuery('form.variations_form')).val();
 						var variation_id = jQuery('input[name="variation_id"]', jQuery('form.variations_form')).val();
@@ -208,7 +314,6 @@
 					}else{
 						jQuery(document).trigger('superfrete_shipping_address_updated', [t]);
 					}
-
 				}
 			}).always(function () {
 				parent.removeLoading();
@@ -222,14 +327,134 @@
 		}
 
 		this.autoSelectCountry = function () {
-			var auto_select_country_code = true;
-			if (auto_select_country_code == false) return;
-
+			var auto_select_country_code = 'BR'; // Always Brazil for SuperFrete
 			jQuery("#calc_shipping_country option[value='" + auto_select_country_code + "']").prop('selected', 'selected');
 			jQuery("#calc_shipping_country").trigger('change');
-
 		}
 
+		this.initCEPMasking = function () {
+			var parent = this;
+			
+			// CEP input masking and auto-submit functionality
+			jQuery(document).on('input', '#calc_shipping_postcode', function(e) {
+				var input = jQuery(this);
+				var currentValue = input.val();
+				var cursorPosition = input[0].selectionStart;
+				var value = currentValue.replace(/\D/g, ''); // Remove non-digits
+				
+				// Limit to 8 digits maximum
+				if (value.length > 8) {
+					value = value.substring(0, 8);
+				}
+				
+				// Apply CEP mask (00000-000)
+				var formattedValue = value;
+				if (value.length >= 5) {
+					formattedValue = value.substring(0, 5) + '-' + value.substring(5, 8);
+				}
+				
+				// Update input value only if it changed
+				if (currentValue !== formattedValue) {
+					input.val(formattedValue);
+					
+					// Restore cursor position after formatting
+					var newCursorPos = cursorPosition;
+					if (cursorPosition > 5 && formattedValue.length > 5) {
+						newCursorPos = cursorPosition;
+					} else if (cursorPosition === 5 && formattedValue.length > 5) {
+						newCursorPos = 6; // Skip the dash
+					}
+					
+					setTimeout(function() {
+						input[0].setSelectionRange(newCursorPos, newCursorPos);
+					}, 0);
+				}
+				
+				
+				// Update status message and auto-calculate when CEP is complete
+				parent.updateCEPStatus(value);
+			});
+			
+			// Handle autocomplete change events
+			jQuery(document).on('change', '#calc_shipping_postcode', function(e) {
+				var input = jQuery(this);
+				var value = input.val().replace(/\D/g, '');
+				
+				// If autocomplete filled the field, format and calculate
+				if (value.length > 0) {
+					// Apply formatting
+					var formattedValue = value;
+					if (value.length >= 5) {
+						formattedValue = value.substring(0, 5) + '-' + value.substring(5, 8);
+					}
+					input.val(formattedValue);
+					
+					// Update status and calculate if complete
+					parent.updateCEPStatus(value);
+				}
+			});
+
+			// Prevent non-numeric input except dash
+			jQuery(document).on('keypress', '#calc_shipping_postcode', function(e) {
+				var char = String.fromCharCode(e.which);
+				if (!/[0-9-]/.test(char)) {
+					e.preventDefault();
+				}
+			});
+
+			// Handle paste events
+			jQuery(document).on('paste', '#calc_shipping_postcode', function(e) {
+				var parent_calc = parent;
+				setTimeout(function() {
+					var input = jQuery('#calc_shipping_postcode');
+					var value = input.val().replace(/\D/g, '');
+					
+					// Limit to 8 digits
+					if (value.length > 8) {
+						value = value.substring(0, 8);
+					}
+					
+					// Apply CEP mask
+					var formattedValue = value;
+					if (value.length >= 5) {
+						formattedValue = value.substring(0, 5) + '-' + value.substring(5, 8);
+					}
+					
+					input.val(formattedValue);
+					
+					// Update status and calculate if complete
+					parent_calc.updateCEPStatus(value);
+				}, 0);
+			});
+		}
+		
+		this.updateCEPStatus = function(cleanValue) {
+			var parent = this;
+			
+			if (cleanValue.length === 0) {
+				jQuery("#superfrete-status-message p").text('💡 Digite seu CEP para calcular automaticamente o frete e prazo de entrega');
+				jQuery("#superfrete-results-container").hide();
+				jQuery("#superfrete-status-message").show();
+			} else if (cleanValue.length < 8) {
+				jQuery("#superfrete-status-message p").text('⌨️ Continue digitando seu CEP...');
+				jQuery("#superfrete-results-container").hide();
+				jQuery("#superfrete-status-message").show();
+			} else if (cleanValue.length === 8) {
+				jQuery("#superfrete-status-message p").text('🔄 Calculando frete automaticamente...');
+				// Check if this is a new CEP (different from last calculated)
+				var lastCalculatedCEP = jQuery("#calc_shipping_postcode").data('last-calculated-cep');
+				if (lastCalculatedCEP !== cleanValue) {
+					// Store the CEP being calculated
+					jQuery("#calc_shipping_postcode").data('last-calculated-cep', cleanValue);
+					// Small delay to ensure user sees the formatted CEP
+					setTimeout(function() {
+						if (parent.form_present()) {
+							parent.onloadShippingMethod();
+						}
+					}, 300);
+				}
+			}
+		}
 	}
 
 	jQuery(function ($) {

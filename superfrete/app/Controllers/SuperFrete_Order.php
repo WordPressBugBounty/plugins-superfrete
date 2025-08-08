@@ -5,6 +5,7 @@ namespace SuperFrete_API\Controllers;
 use SuperFrete_API\Http\Request;
 use SuperFrete_API\Helpers\Logger;
 use SuperFrete_API\Helpers\SuperFrete_Notice;
+use SuperFrete_API\Helpers\AddressHelper;
 use WC_Order;
 
 if (!defined('ABSPATH'))
@@ -32,7 +33,8 @@ class SuperFrete_Order
         if (!$order)
             return;
 
-        $superfrete_status = get_post_meta($order_id, '_superfrete_status', true);
+        $order = wc_get_order($order_id);
+        $superfrete_status = $order ? $order->get_meta('_superfrete_status') : '';
         if ($superfrete_status == 'enviado')
             return;
 
@@ -70,11 +72,106 @@ if (empty($shipping) || empty($shipping['first_name'])) {
 
         // Verifica e adiciona os campos personalizados
         if (empty($shipping['number'])) {
-            $shipping['number'] = $order->get_meta('_shipping_number');
+            // Try multiple possible field names for number
+            $possible_number_fields = [
+                '_shipping_number',
+                '_billing_number',
+                '_WC_OTHER/SHIPPING/NUMBER',
+                'shipping/number',
+                'billing_number'
+            ];
+            
+            foreach ($possible_number_fields as $field) {
+                $value = $order->get_meta($field);
+                Logger::log('SuperFrete', 'Checking number field ' . $field . ' for order #' . $order_id . ': "' . $value . '"');
+                if (!empty($value)) {
+                    $shipping['number'] = $value;
+                    Logger::log('SuperFrete', 'Using number from field ' . $field . ' for order #' . $order_id . ': ' . $value);
+                    break;
+                }
+            }
+            
+            // If still empty, search directly in meta data
+            if (empty($shipping['number'])) {
+                $all_meta = $order->get_meta_data();
+                foreach ($all_meta as $meta) {
+                    if (strpos(strtolower($meta->key), 'number') !== false && !empty($meta->value)) {
+                        $shipping['number'] = $meta->value;
+                        Logger::log('SuperFrete', 'Found number via meta search for order #' . $order_id . ' (key: ' . $meta->key . '): ' . $meta->value);
+                        break;
+                    }
+                }
+            }
         }
+        
         if (empty($shipping['neighborhood'])) {
-            $shipping['neighborhood'] = $order->get_meta('_shipping_neighborhood');
+            // Try multiple possible field names for neighborhood
+            $possible_neighborhood_fields = [
+                '_shipping_neighborhood',
+                '_billing_neighborhood',
+                '_WC_OTHER/SHIPPING/NEIGHBORHOOD',
+                'shipping/neighborhood',
+                'billing_neighborhood'
+            ];
+            
+            foreach ($possible_neighborhood_fields as $field) {
+                $value = $order->get_meta($field);
+                Logger::log('SuperFrete', 'Checking neighborhood field ' . $field . ' for order #' . $order_id . ': "' . $value . '"');
+                if (!empty($value)) {
+                    $shipping['neighborhood'] = $value;
+                    Logger::log('SuperFrete', 'Using neighborhood from field ' . $field . ' for order #' . $order_id . ': ' . $value);
+                    break;
+                }
+            }
+            
+            // If still empty, search directly in meta data
+            if (empty($shipping['neighborhood'])) {
+                $all_meta = $order->get_meta_data();
+                foreach ($all_meta as $meta) {
+                    if (strpos(strtolower($meta->key), 'neighborhood') !== false && !empty($meta->value)) {
+                        $shipping['neighborhood'] = $meta->value;
+                        Logger::log('SuperFrete', 'Found neighborhood via meta search for order #' . $order_id . ' (key: ' . $meta->key . '): ' . $meta->value);
+                        break;
+                    }
+                }
+            }
         }
+        
+        // If district is still missing, try to get it from ViaCEP
+        if (empty($shipping['neighborhood']) && !empty($shipping['postcode'])) {
+            Logger::log('SuperFrete', 'District missing for order #' . $order_id . ', trying ViaCEP for CEP: ' . $shipping['postcode']);
+            $district_from_viacep = AddressHelper::get_district_from_postal_code($shipping['postcode']);
+            if ($district_from_viacep) {
+                $shipping['neighborhood'] = $district_from_viacep;
+                Logger::log('SuperFrete', 'Got district from ViaCEP for order #' . $order_id . ': ' . $district_from_viacep);
+            } else {
+                Logger::log('SuperFrete', 'Could not get district from ViaCEP for order #' . $order_id . ' with CEP: ' . $shipping['postcode']);
+            }
+        }
+        
+        // Get customer document (CPF/CNPJ)
+        $document = '';
+        
+        // Search through all meta data for document field
+        $all_meta = $order->get_meta_data();
+        foreach ($all_meta as $meta) {
+            // Check if this could be our document field
+            if (strpos($meta->key, 'DOCUMENT') !== false || strpos($meta->key, 'document') !== false) {
+                $clean_value = preg_replace('/[^0-9]/', '', $meta->value);
+                
+                if (strlen($clean_value) == 11 || strlen($clean_value) == 14) {
+                    $document = $clean_value;
+                    Logger::log('SuperFrete', 'Document found for order #' . $order_id . ': ' . substr($document, 0, 3) . '***');
+                    break;
+                }
+            }
+        }
+        
+        // If no document found, log warning
+        if (empty($document)) {
+            Logger::log('SuperFrete', 'Warning: No CPF/CNPJ found for order #' . $order_id);
+        }
+        
         $destinatario = [
             'name' => $shipping['first_name'] . ' ' . $shipping['last_name'],
             'address' => $shipping['address_1'],
@@ -85,20 +182,63 @@ if (empty($shipping) || empty($shipping['first_name'])) {
             'state_abbr' => $shipping['state'],
             'postal_code' => preg_replace('/[^\p{L}\p{N}\s]/', '', $shipping['postcode'])
         ];
+        
+        // Add document if available
+        if (!empty($document)) {
+            $destinatario['document'] = $document;
+            Logger::log('SuperFrete', 'Document added to destinatario for order #' . $order_id . ': ' . substr($document, 0, 3) . '***');
+        } else {
+            Logger::log('SuperFrete', 'WARNING: No document found to add to destinatario for order #' . $order_id);
+        }
 
         // Obtém o método de envio escolhido
         $chosen_methods = $order->get_shipping_methods();
         $service = "";
 
         foreach ($chosen_methods as $method) {
-
-
-            if (strpos(strtolower($method->get_name()), 'pac') !== false) {
-                $service = "1";
-            } elseif (strpos(strtolower($method->get_name()), 'sedex') !== false) {
-                $service = "2";
-            } elseif (strpos(strtolower($method->get_name()), 'mini envios') !== false) {
-                $service = "17";
+            // First try to get service ID from method metadata
+            $method_data = $method->get_data();
+            if (isset($method_data['meta_data']) && is_array($method_data['meta_data'])) {
+                foreach ($method_data['meta_data'] as $meta) {
+                    if ($meta->key === 'service_id') {
+                        $service = strval($meta->value);
+                        Logger::log('SuperFrete', 'Got service ID from metadata for order #' . $order_id . ': ' . $service);
+                        break 2; // Exit both loops
+                    }
+                }
+            }
+            
+            // Fallback to name-based detection if no metadata
+            if (empty($service)) {
+                $method_id = $method->get_method_id();
+                $method_name = strtolower($method->get_name());
+                
+                // Check method ID first (more reliable)
+                if (strpos($method_id, 'superfrete_pac') !== false) {
+                    $service = "1";
+                } elseif (strpos($method_id, 'superfrete_sedex') !== false) {
+                    $service = "2";
+                } elseif (strpos($method_id, 'superfrete_jadlog') !== false) {
+                    $service = "3";
+                } elseif (strpos($method_id, 'superfrete_mini_envio') !== false) {
+                    $service = "17";
+                } elseif (strpos($method_id, 'superfrete_loggi') !== false) {
+                    $service = "31";
+                }
+                // Fallback to name checking
+                elseif (strpos($method_name, 'pac') !== false) {
+                    $service = "1";
+                } elseif (strpos($method_name, 'sedex') !== false) {
+                    $service = "2";
+                } elseif (strpos($method_name, 'jadlog') !== false) {
+                    $service = "3";
+                } elseif (strpos($method_name, 'mini envio') !== false) {
+                    $service = "17";
+                } elseif (strpos($method_name, 'loggi') !== false) {
+                    $service = "31";
+                }
+                
+                Logger::log('SuperFrete', 'Service ID for order #' . $order_id . ' determined from method ID/name: ' . $service . ' (method_id: ' . $method_id . ', name: ' . $method_name . ')');
             }
         }
         $request = new Request();
@@ -185,7 +325,7 @@ if (empty($shipping) || empty($shipping['first_name'])) {
             'from' => $remetente,
             'to' => $destinatario,
             'email' => $order->get_billing_email(),
-            'service' => $service,
+            'service' => intval($service),
             'products' => $produtos,
             'volumes' => $volume_data,
             'options' => [
@@ -250,12 +390,18 @@ if (empty($shipping) || empty($shipping['first_name'])) {
         }
 
         Logger::log('SuperFrete', 'Resposta da API para o pedido #' . $order_id . ': ' . wp_json_encode($response));
+
         if ($response) {
-            update_post_meta($order_id, '_superfrete_id', $response['id']);
-            update_post_meta($order_id, '_superfrete_protocol', $response['protocol']);
-            update_post_meta($order_id, '_superfrete_price', $response['price']);
-            update_post_meta($order_id, '_superfrete_status', 'enviado');
+            $order = wc_get_order($order_id);
+            if ($order) {
+                $order->update_meta_data('_superfrete_id', $response['id']);
+                $order->update_meta_data('_superfrete_protocol', $response['protocol']);
+                $order->update_meta_data('_superfrete_price', $response['price']);
+                $order->update_meta_data('_superfrete_status', 'enviado');
+                $order->save();
+            }
         }
+
         return $response;
     }
 }

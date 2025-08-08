@@ -12,7 +12,7 @@ class SuperFrete_Notice {
      * @param array $missing_fields Campos que precisam ser preenchidos.
      */
     public static function add_error($order_id, $message, $missing_fields = []) {
-        if (!session_id()) {
+        if (!session_id() && !headers_sent()) {
             session_start();
         }
 
@@ -27,7 +27,7 @@ class SuperFrete_Notice {
      * Exibe os erros armazenados em um popup no frontend
      */
 public static function display_errors() {
-    if (!session_id()) {
+    if (!session_id() && !headers_sent()) {
         session_start();
     }
 

@@ -1,0 +1,247 @@
+/* SuperFrete Calculator Styles */
+
+#super-frete-shipping-calculator {
+    background-color: var(--superfrete-bg-color);
+    padding: var(--superfrete-spacing-lg);
+    border-radius: var(--superfrete-radius-lg);
+    margin-bottom: var(--superfrete-spacing-lg);
+    max-width: 500px;
+    box-shadow: var(--superfrete-shadow-sm);
+    font-size: var(--superfrete-font-size-base);
+    line-height: var(--superfrete-line-height);
+    font-family: var(--superfrete-font-family);
+    color: var(--superfrete-text-color);
+}
+
+.superfrete-input-section {
+    margin-bottom: var(--superfrete-spacing-md);
+}
+
+/* Input field styles */
+#calc_shipping_postcode_field {
+    margin-bottom: var(--superfrete-spacing-md);
+}
+
+#calc_shipping_postcode_field input {
+    width: 100%;
+    padding: var(--superfrete-spacing-sm) var(--superfrete-spacing-md);
+    border: 1px solid var(--superfrete-border-color);
+    border-radius: var(--superfrete-radius-sm);
+    font-size: var(--superfrete-font-size-base);
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+    font-family: var(--superfrete-font-family);
+    color: var(--superfrete-text-color);
+    background-color: var(--superfrete-bg-white);
+}
+
+#calc_shipping_postcode_field input:focus {
+    border-color: var(--superfrete-primary-color);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--superfrete-bg-light);
+    transform: scale(1.02);
+}
+
+#calc_shipping_postcode_field input:valid {
+    border-color: var(--superfrete-primary-color);
+    background-color: var(--superfrete-bg-light);
+}
+
+#calc_shipping_postcode_field input::placeholder {
+    color: var(--superfrete-text-color);
+    opacity: 0.6;
+    font-weight: 400;
+}
+
+/* Submit button styles */
+.superfrete-update-address-button {
+    width: 100%;
+    background-color: var(--superfrete-primary-color);
+    color: white;
+    padding: var(--superfrete-spacing-sm);
+    border: none;
+    border-radius: var(--superfrete-radius-sm);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: var(--superfrete-font-size-small);
+    text-transform: uppercase;
+    transition: background-color 0.3s;
+    font-family: var(--superfrete-font-family);
+}
+
+.superfrete-update-address-button:hover {
+    background-color: var(--superfrete-primary-hover);
+}
+
+/* Legacy alert container styles - kept for compatibility */
+.superfrete-alert-container {
+    background-color: var(--superfrete-bg-white);
+    border: 1px solid var(--superfrete-border-light);
+    border-radius: var(--superfrete-radius-sm);
+    padding: var(--superfrete-spacing-md);
+    margin-top: var(--superfrete-spacing-md);
+    box-shadow: var(--superfrete-shadow-sm);
+}
+
+/* Hide empty alert container */
+.superfrete-alert-container:empty {
+    display: none;
+    padding: 0;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+}
+
+/* New results container styles */
+.superfrete-results-container {
+    background-color: var(--superfrete-bg-white);
+    border: 1px solid var(--superfrete-border-light);
+    border-radius: var(--superfrete-radius-sm);
+    padding: var(--superfrete-spacing-md);
+    box-shadow: var(--superfrete-shadow-sm);
+}
+
+/* Status message styles */
+.superfrete-status-message {
+    background-color: var(--superfrete-bg-light);
+    border: 1px solid var(--superfrete-border-light);
+    border-radius: var(--superfrete-radius-sm);
+    padding: var(--superfrete-spacing-md);
+    margin-top: var(--superfrete-spacing-md);
+    text-align: center;
+    transition: all var(--superfrete-transition-normal);
+}
+
+.superfrete-status-message p {
+    margin: 0;
+    color: var(--superfrete-primary-color);
+    font-size: var(--superfrete-font-size-small);
+    font-weight: 500;
+}
+
+/* Results container styles */
+.superfrete-results-container {
+    margin-top: var(--superfrete-spacing-md);
+    animation: fadeIn var(--superfrete-transition-normal);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.superfrete-error {
+    color: var(--superfrete-error-color);
+    margin-bottom: var(--superfrete-spacing-sm);
+    font-weight: var(--superfrete-font-weight-bold);
+    font-size: var(--superfrete-font-size-small);
+}
+
+/* Remove recalculate button styles - no longer needed */
+
+/* Shipping methods display */
+.superfrete-shipping-methods {
+    margin-top: var(--superfrete-spacing-sm);
+}
+
+.superfrete-shipping-methods h3 {
+    font-size: var(--superfrete-font-size-base);
+    margin-bottom: var(--superfrete-spacing-sm);
+    border-bottom: 1px solid var(--superfrete-border-light);
+    padding-bottom: var(--superfrete-spacing-sm);
+    color: var(--superfrete-heading-color);
+    font-weight: 600;
+}
+
+.superfrete-shipping-method {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--superfrete-spacing-sm) 0;
+    border-bottom: 1px solid var(--superfrete-border-light);
+    align-items: center;
+}
+
+.superfrete-shipping-method:last-child {
+    border-bottom: none;
+}
+
+.superfrete-shipping-method-name {
+    font-weight: 600;
+    color: var(--superfrete-text-color);
+    font-size: var(--superfrete-font-size-small);
+    flex: 1;
+}
+
+.superfrete-shipping-method-price {
+    font-weight: 600;
+    color: var(--superfrete-primary-color);
+    font-size: var(--superfrete-font-size-small);
+    text-align: right;
+}
+
+/* Fix for WooCommerce price display */
+.superfrete-shipping-method-price .woocommerce-Price-amount {
+    font-weight: 600;
+    color: var(--superfrete-primary-color);
+    font-size: var(--superfrete-font-size-small);
+    display: inline-block;
+}
+
+.superfrete-shipping-method-price .woocommerce-Price-currencySymbol {
+    font-size: 0.75rem;
+    margin-right: 1px;
+    display: inline-block;
+}
+
+/* Loading state */
+.superfrete-processing {
+    position: relative;
+}
+
+.superfrete-processing #super-frete-shipping-calculator::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    z-index: var(--superfrete-z-overlay);
+    border-radius: var(--superfrete-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.superfrete-processing #super-frete-shipping-calculator::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 24px;
+    height: 24px;
+    margin-top: -12px;
+    margin-left: -12px;
+    border: 2px solid var(--superfrete-primary-color);
+    border-top: 2px solid transparent;
+    border-radius: 50%;
+    z-index: var(--superfrete-z-loading);
+    animation: superfrete-spin 0.8s linear infinite;
+}
+
+@keyframes superfrete-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Hide the notification about updated shipping costs */
+.woocommerce-info.woocommerce-message {
+    display: none;
+}
+
+/* Remove any double display of shipping text */
+.superfrete-shipping-method-name span,
+.superfrete-shipping-method-price br {
+    display: none;
+} 
