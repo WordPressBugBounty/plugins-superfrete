@@ -48,6 +48,22 @@ class Request {
             return false;
         }
         
+        // Check if proxy is configured and force proxy mode is enabled
+        $proxy_url = get_option('superfrete_proxy_url');
+        
+        // Set default proxy URL if not configured
+        if (empty($proxy_url)) {
+            $proxy_url = 'https://api.dev.superintegrador.superfrete.com/headless/proxy/superfrete';
+            Logger::log('SuperFrete', "Using default proxy URL: {$proxy_url}");
+        }
+        
+        $force_proxy = get_option('superfrete_force_proxy', 'no') === 'yes';
+        
+        if (!empty($proxy_url) && $force_proxy) {
+            Logger::log('SuperFrete', "Force proxy mode enabled - using proxy directly");
+            return $this->call_via_proxy($proxy_url, $endpoint, $method, $payload);
+        }
+        
         try {
             $headers = [
                 'Content-Type' => 'application/json',
@@ -61,25 +77,162 @@ class Request {
                 'headers' => $headers,
                 'method' => $method,
                 'timeout' => 30, // Increased timeout to 30 seconds
+                'sslverify' => false, // Skip SSL verification for faster connection
+                'redirection' => 5,
+                'httpversion' => '1.1',
             ];
+            
+            // LiteSpeed server detected - add additional timeout parameters
+            if (isset($_SERVER['SERVER_SOFTWARE']) && strpos($_SERVER['SERVER_SOFTWARE'], 'LiteSpeed') !== false) {
+                // LiteSpeed often ignores standard timeout - try cURL-specific options
+                $params['timeout'] = 35; // Slightly higher for LiteSpeed
+                $params['user-agent'] = 'WordPress/' . get_bloginfo('version') . '; SuperFrete Plugin';
+                
+                // Add stream context options for alternative transport
+                $params['stream_context'] = stream_context_create([
+                    'http' => [
+                        'timeout' => 35,
+                        'user_agent' => 'WordPress/' . get_bloginfo('version') . '; SuperFrete Plugin',
+                    ]
+                ]);
+            }
 
             if ($method === 'POST' && !empty($payload)) {
                 $params['body'] = wp_json_encode($payload);
                 error_log('SuperFrete API Payload: ' . wp_json_encode($payload));
             }
 
-            $start_time = microtime(true);
-            $response = ($method === 'POST') ? wp_remote_post($this->api_url . $endpoint, $params) : wp_remote_get($this->api_url . $endpoint, $params);
-            $end_time = microtime(true);
+            // Force timeout to prevent hosting overrides
+            $timeout_filter = function() { return 30; };
+            $args_filter = function($args) {
+                if (isset($args['headers']['Authorization']) && strpos($args['headers']['Authorization'], 'Bearer') === 0) {
+                    $args['timeout'] = 30;
+                }
+                return $args;
+            };
+            
+            add_filter('http_request_timeout', $timeout_filter);
+            add_filter('http_request_args', $args_filter);
+            
+            $max_attempts = 3;
+            $attempt = 1;
+            $response = null;
+            
+            while ($attempt <= $max_attempts) {
+                $start_time = microtime(true);
+                $response = ($method === 'POST') ? wp_remote_post($this->api_url . $endpoint, $params) : wp_remote_get($this->api_url . $endpoint, $params);
+                $end_time = microtime(true);
+                
+                // If successful or not a timeout, break
+                if (!is_wp_error($response) || strpos($response->get_error_message(), 'timeout') === false) {
+                    break;
+                }
+                
+                // Log retry attempt
+                $error_msg = $response->get_error_message();
+                Logger::log('SuperFrete', "Attempt {$attempt}/{$max_attempts} failed: {$error_msg}");
+                
+                $attempt++;
+                if ($attempt <= $max_attempts) {
+                    // Wait before retry (exponential backoff)
+                    $wait_seconds = pow(2, $attempt - 1);
+                    Logger::log('SuperFrete', "Retrying in {$wait_seconds} seconds...");
+                    sleep($wait_seconds);
+                }
+            }
+            
+            // Remove filters to not affect other plugins
+            remove_filter('http_request_timeout', $timeout_filter);
+            remove_filter('http_request_args', $args_filter);
             $request_time = round(($end_time - $start_time) * 1000, 2);
             
             error_log('SuperFrete API Request Time: ' . $request_time . ' ms');
 
-            // Check for WP errors first
+            // Check for WP errors first (timeout, connection issues, etc.)
             if (is_wp_error($response)) {
+                $error_code = $response->get_error_code();
                 $error_message = $response->get_error_message();
+                
+                // Collect diagnostic information
+                $diagnostics = [
+                    'error_code' => $error_code,
+                    'error_message' => $error_message,
+                    'endpoint' => $endpoint,
+                    'method' => $method,
+                    'request_time_ms' => round(($end_time - $start_time) * 1000, 2),
+                    'configured_timeout' => $params['timeout'] ?? 'unknown',
+                    'api_url' => $this->api_url,
+                    'environment' => $environment,
+                    'wp_version' => get_bloginfo('version'),
+                    'php_version' => PHP_VERSION,
+                    'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+                    'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+                    'server_ip' => $_SERVER['SERVER_ADDR'] ?? 'unknown',
+                    'client_ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+                    'host' => $_SERVER['HTTP_HOST'] ?? 'unknown',
+                ];
+                
+                // Check if it's a timeout specifically
+                if (strpos($error_message, 'timeout') !== false || strpos($error_message, 'timed out') !== false) {
+                    $diagnostics['timeout_type'] = 'connection_timeout';
+                    
+                    // Check for hosting-specific indicators
+                    if (strpos($_SERVER['SERVER_SOFTWARE'] ?? '', 'nginx') !== false) {
+                        $diagnostics['server_type'] = 'nginx';
+                    } elseif (strpos($_SERVER['SERVER_SOFTWARE'] ?? '', 'Apache') !== false) {
+                        $diagnostics['server_type'] = 'apache';
+                    }
+                    
+                    // Check for common hosting providers
+                    $host_indicators = [
+                        'hostgator' => strpos($_SERVER['HTTP_HOST'] ?? '', 'hostgator') !== false,
+                        'godaddy' => strpos($_SERVER['HTTP_HOST'] ?? '', 'secureserver') !== false,
+                        'bluehost' => strpos($_SERVER['HTTP_HOST'] ?? '', 'bluehost') !== false,
+                        'siteground' => strpos($_SERVER['HTTP_HOST'] ?? '', 'siteground') !== false,
+                        'wpengine' => strpos($_SERVER['HTTP_HOST'] ?? '', 'wpengine') !== false,
+                    ];
+                    $diagnostics['hosting_indicators'] = array_filter($host_indicators);
+                    
+                    // Check PHP configurations that might affect timeouts
+                    $diagnostics['php_config'] = [
+                        'max_execution_time' => ini_get('max_execution_time'),
+                        'default_socket_timeout' => ini_get('default_socket_timeout'),
+                        'curl_available' => function_exists('curl_init'),
+                        'openssl_version' => OPENSSL_VERSION_TEXT ?? 'unknown',
+                    ];
+                    
+                    // Test basic connectivity
+                    $diagnostics['connectivity_test'] = [
+                        'can_resolve_dns' => gethostbyname('api.superfrete.com') !== 'api.superfrete.com',
+                        'superfrete_ip' => gethostbyname('api.superfrete.com'),
+                    ];
+                }
+                
+                $diagnostic_json = wp_json_encode($diagnostics, JSON_PRETTY_PRINT);
+                
+                Logger::log('SuperFrete', "TIMEOUT DIAGNOSTICS:\n" . $diagnostic_json);
+                error_log('SuperFrete TIMEOUT DIAGNOSTICS: ' . $diagnostic_json);
+                
+                // Also log the original error message for backwards compatibility
                 Logger::log('SuperFrete', "WP Error na API ({$endpoint}): " . $error_message);
-                error_log('SuperFrete API WP Error: ' . $error_message);
+                
+                // Check if this is a timeout and we have a proxy available for fallback
+                if ((strpos($error_message, 'timeout') !== false || strpos($error_message, 'timed out') !== false) && !empty($proxy_url)) {
+                    Logger::log('SuperFrete', "TIMEOUT DETECTED - Attempting automatic proxy fallback");
+                    
+                    $proxy_result = $this->call_via_proxy($proxy_url, $endpoint, $method, $payload);
+                    if ($proxy_result !== false) {
+                        Logger::log('SuperFrete', "PROXY FALLBACK SUCCESSFUL - Enabling proxy for future requests");
+                        
+                        // Enable force proxy mode to avoid future timeouts
+                        update_option('superfrete_force_proxy', 'yes');
+                        
+                        return $proxy_result;
+                    } else {
+                        Logger::log('SuperFrete', "PROXY FALLBACK ALSO FAILED");
+                    }
+                }
+                
                 return false;
             }
 
@@ -289,5 +442,63 @@ class Request {
 
         Logger::log('SuperFrete', 'Falha ao listar webhooks');
         return false;
+    }
+
+    /**
+     * Make API call via proxy to work around hosting timeouts
+     */
+    private function call_via_proxy($proxy_url, $endpoint, $method, $payload = []) {
+        Logger::log('SuperFrete', "Using proxy for API call: {$proxy_url}");
+        
+        $proxy_payload = [
+            'endpoint' => $endpoint,
+            'method' => $method,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $this->api_token,
+            ]
+        ];
+        
+        if (!empty($payload)) {
+            $proxy_payload['body'] = $payload;
+        }
+        
+        $params = [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ],
+            'method' => 'POST',
+            'body' => wp_json_encode($proxy_payload),
+            'timeout' => 65, // Slightly higher than proxy timeout
+        ];
+        
+        $start_time = microtime(true);
+        $response = wp_remote_post($proxy_url, $params);
+        $end_time = microtime(true);
+        $request_time = round(($end_time - $start_time) * 1000, 2);
+        
+        Logger::log('SuperFrete', "Proxy request time: {$request_time} ms");
+        
+        if (is_wp_error($response)) {
+            Logger::log('SuperFrete', 'Proxy request failed: ' . $response->get_error_message());
+            return false;
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if ($status_code !== 200) {
+            Logger::log('SuperFrete', "Proxy returned error: {$status_code} - {$body}");
+            return false;
+        }
+        
+        if (!$data || !$data['success']) {
+            Logger::log('SuperFrete', 'Proxy request unsuccessful: ' . wp_json_encode($data));
+            return false;
+        }
+        
+        Logger::log('SuperFrete', "Proxy call successful - Duration: {$data['duration']}");
+        return $data['data'];
     }
 }

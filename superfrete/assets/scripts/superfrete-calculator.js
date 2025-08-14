@@ -214,6 +214,7 @@
 				url: superfrete_setting.wc_ajax_url.toString().replace('%%endpoint%%', action),
 				data: e.serialize() + auto_load_variable,
 				dataType: "json",
+				timeout: 30000, // 30 second timeout
 				success: function (t) {					
 					// Output performance logs to console if available
 					if (t.performance_log) {
@@ -315,6 +316,35 @@
 						jQuery(document).trigger('superfrete_shipping_address_updated', [t]);
 					}
 				}
+			}).fail(function(xhr, status, error) {
+				// Handle AJAX errors
+				console.error('SuperFrete AJAX Error:', {
+					status: status,
+					error: error,
+					responseText: xhr.responseText,
+					statusCode: xhr.status
+				});
+				
+				// Show user-friendly error message
+				var errorMessage = 'Erro ao calcular frete. ';
+				if (status === 'timeout') {
+					errorMessage += 'A consulta demorou mais que o esperado. Tente novamente.';
+				} else if (xhr.status === 0) {
+					errorMessage += 'Verifique sua conexão com a internet.';
+				} else if (xhr.status === 500) {
+					errorMessage += 'Erro interno do servidor. Tente novamente.';
+				} else if (xhr.status === 404) {
+					errorMessage += 'Serviço não encontrado.';
+				} else if (xhr.status === 403) {
+					errorMessage += 'Acesso negado. Recarregue a página e tente novamente.';
+				} else {
+					errorMessage += 'Tente novamente em alguns segundos.';
+				}
+				
+				jQuery("#superfrete-status-message p").text('❌ ' + errorMessage);
+				jQuery("#superfrete-results-container").hide();
+				jQuery("#superfrete-status-message").show();
+				jQuery("#superfrete-error").html('<div class="superfrete-alert superfrete-alert-error">' + errorMessage + '</div>');
 			}).always(function () {
 				parent.removeLoading();
 			})
@@ -357,19 +387,33 @@
 				if (currentValue !== formattedValue) {
 					input.val(formattedValue);
 					
-					// Restore cursor position after formatting
+					// Better cursor positioning logic
 					var newCursorPos = cursorPosition;
-					if (cursorPosition > 5 && formattedValue.length > 5) {
-						newCursorPos = cursorPosition;
-					} else if (cursorPosition === 5 && formattedValue.length > 5) {
-						newCursorPos = 6; // Skip the dash
+					
+					// If cursor was before or at the dash position and we're removing characters
+					if (currentValue.length > formattedValue.length) {
+						// Deleting - adjust cursor position
+						if (cursorPosition > 5 && formattedValue.includes('-')) {
+							newCursorPos = Math.min(cursorPosition, formattedValue.length);
+						} else if (cursorPosition === 6 && !formattedValue.includes('-')) {
+							// If dash was removed, position cursor after the last digit
+							newCursorPos = formattedValue.length;
+						}
+					} else {
+						// Adding characters - normal positioning
+						if (cursorPosition === 5 && formattedValue.length > 5) {
+							newCursorPos = 6; // Skip the dash
+						} else if (cursorPosition > 5 && formattedValue.includes('-')) {
+							newCursorPos = cursorPosition;
+						}
 					}
 					
 					setTimeout(function() {
-						input[0].setSelectionRange(newCursorPos, newCursorPos);
+						if (input[0] && typeof input[0].setSelectionRange === 'function') {
+							input[0].setSelectionRange(newCursorPos, newCursorPos);
+						}
 					}, 0);
 				}
-				
 				
 				// Update status message and auto-calculate when CEP is complete
 				parent.updateCEPStatus(value);
@@ -391,6 +435,72 @@
 					
 					// Update status and calculate if complete
 					parent.updateCEPStatus(value);
+				}
+			});
+
+			// Handle backspace/delete for dash position
+			jQuery(document).on('keydown', '#calc_shipping_postcode', function(e) {
+				var input = jQuery(this);
+				var cursorPosition = input[0].selectionStart;
+				var currentValue = input.val();
+				
+				// Handle backspace (8) and delete (46) keys
+				if (e.keyCode === 8 || e.keyCode === 46) {
+					// If cursor is right after the dash and user presses backspace
+					if (e.keyCode === 8 && cursorPosition === 6 && currentValue.charAt(5) === '-') {
+						// Remove the character before the dash instead
+						var newValue = currentValue.substring(0, 4) + currentValue.substring(6);
+						input.val(newValue);
+						
+						// Position cursor at the end of the remaining digits
+						setTimeout(function() {
+							var cleanValue = newValue.replace(/\D/g, '');
+							var formattedValue = cleanValue;
+							if (cleanValue.length >= 5) {
+								formattedValue = cleanValue.substring(0, 5) + '-' + cleanValue.substring(5, 8);
+							}
+							input.val(formattedValue);
+							
+							// Position cursor appropriately
+							var newPos = Math.min(4, formattedValue.length);
+							if (input[0] && typeof input[0].setSelectionRange === 'function') {
+								input[0].setSelectionRange(newPos, newPos);
+							}
+							
+							// Trigger updateCEPStatus manually since we bypassed the input event
+							parent.updateCEPStatus(cleanValue);
+						}, 0);
+						
+						e.preventDefault();
+						return false;
+					}
+					
+					// If cursor is on the dash and user presses delete
+					if (e.keyCode === 46 && cursorPosition === 5 && currentValue.charAt(5) === '-') {
+						// Remove the character after the dash instead
+						var newValue = currentValue.substring(0, 6) + currentValue.substring(7);
+						input.val(newValue);
+						
+						setTimeout(function() {
+							var cleanValue = newValue.replace(/\D/g, '');
+							var formattedValue = cleanValue;
+							if (cleanValue.length >= 5) {
+								formattedValue = cleanValue.substring(0, 5) + '-' + cleanValue.substring(5, 8);
+							}
+							input.val(formattedValue);
+							
+							// Keep cursor at dash position
+							if (input[0] && typeof input[0].setSelectionRange === 'function') {
+								input[0].setSelectionRange(5, 5);
+							}
+							
+							// Trigger updateCEPStatus manually since we bypassed the input event
+							parent.updateCEPStatus(cleanValue);
+						}, 0);
+						
+						e.preventDefault();
+						return false;
+					}
 				}
 			});
 

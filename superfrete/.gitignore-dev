@@ -1,0 +1,25 @@
+# Nix
+.direnv/
+result
+result-*
+
+# Docker
+docker-compose.override.yml
+
+# WordPress Development
+wp-content/
+db_data/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log 

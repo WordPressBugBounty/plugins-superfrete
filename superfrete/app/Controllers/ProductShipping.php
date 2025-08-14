@@ -339,7 +339,27 @@ class ProductShipping {
                     $log_data['steps']['calculate_test_shipping'] = round((microtime(true) - $step_start) * 1000, 2) . ' ms';
                     $step_start = microtime(true);
                     
-                    // Format shipping methods
+                    // Sort rates by price (lowest to highest) before formatting
+                    uasort($rates, function($a, $b) {
+                        $cost_a = floatval($a->cost);
+                        $cost_b = floatval($b->cost);
+                        
+                        // Free shipping (cost = 0) should come first
+                        if ($cost_a == 0 && $cost_b > 0) return -1;
+                        if ($cost_b == 0 && $cost_a > 0) return 1;
+                        
+                        // Both free or both paid - sort by cost ascending (lowest first)
+                        if ($cost_a == $cost_b) {
+                            // If costs are equal, sort by delivery time (faster first)
+                            $time_a = isset($a->meta_data['delivery_time']) ? intval($a->meta_data['delivery_time']) : 999;
+                            $time_b = isset($b->meta_data['delivery_time']) ? intval($b->meta_data['delivery_time']) : 999;
+                            return $time_a <=> $time_b;
+                        }
+                        
+                        return $cost_a <=> $cost_b;
+                    });
+                    
+                    // Format shipping methods (now sorted by price)
                     $shipping_methods = [];
                     foreach ($rates as $rate_id => $rate) {
                         $title = wc_cart_totals_shipping_method_label($rate);

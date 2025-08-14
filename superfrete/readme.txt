@@ -1,10 +1,10 @@
 === SuperFrete ===
-Contributors: Zafarie, SuperFrete
+Contributors: SuperFrete
 Tags: WooCommerce, Shipping, Frete, Logística
 Requires at least: 5.6
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 3.1.0
+Stable tag: 3.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,18 +67,20 @@ Principais funcionalidades:
 - `assets/scripts/admin.js` - Script para configuração administrativa.
 
 == Suporte ==
-Caso tenha dúvidas ou precise de suporte, entre em contato através do e-mail [seu-email] ou acesse o repositório do plugin no GitHub.
+Caso tenha dúvidas ou precise de suporte, entre em contato através do e-mail integracao@superfrete.com
 
 == Changelog ==
-= 3.1.0 =
-* 🎨 **Personalização Visual Avançada:** Nova interface completa para personalizar cores e aparência da calculadora de frete
-* 🔧 **Presets de Tema:** Adicionados presets para tema claro, escuro e auto-detecção baseada no site
-* 👁️ **Pré-visualização em Tempo Real:** Visualize as alterações instantaneamente enquanto personaliza as cores
-* 🎯 **UX Melhorada:** Calculadora de frete simplificada com input sempre visível e cálculo automático ao digitar CEP
-* ⚡ **Performance:** Removidas notificações desnecessárias e otimizado fluxo de cálculo
-* 🎛️ **Controles Intuitivos:** Interface reorganizada com cores, tipografia e espaçamentos personalizáveis
-* 🌈 **Compatibilidade de Tema:** Suporte aprimorado para temas claros e escuros com cores adaptáveis
-* 🔄 **Reset Inteligente:** Botão para restaurar rapidamente as configurações padrão do SuperFrete
+
+= 3.3.1 =
+
+* Personalização Visual Avançada:** Nova interface completa para personalizar cores e aparência da calculadora de frete
+* **Presets de Tema:** Adicionados presets para tema claro, escuro e auto-detecção baseada no site
+* **Pré-visualização em Tempo Real:** Visualize as alterações instantaneamente enquanto personaliza as cores
+* **UX Melhorada:** Calculadora de frete simplificada com input sempre visível e cálculo automático ao digitar CEP
+* **Performance:** Removidas notificações desnecessárias e otimizado fluxo de cálculo
+* **Controles Intuitivos:** Interface reorganizada com cores, tipografia e espaçamentos personalizáveis
+* **Compatibilidade de Tema:** Suporte aprimorado para temas claros e escuros com cores adaptáveis
+* **Reset Inteligente:** Botão para restaurar rapidamente as configurações padrão do SuperFrete
 
 = 2.0 =
 * Melhorias na interface administrativa para configuração do frete.
