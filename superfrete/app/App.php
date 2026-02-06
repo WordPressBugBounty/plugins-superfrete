@@ -78,6 +78,14 @@ class App
     }
 
     /**
+     * Check if WooFunnels Aero Checkout is active
+     */
+    private function is_woofunnels_checkout_active()
+    {
+        return class_exists('WFACP_Common') || class_exists('WFACP_Template_Common');
+    }
+
+    /**
      * Inicializa o plugin e adiciona suas funcionalidades
      */
     public function init_plugin()
@@ -219,7 +227,7 @@ class App
             foreach ($method_ids as $method_id) {
                 if (isset($available_methods[$method_id])) {
                     $instance_id = $zone->add_shipping_method($method_id);
-                    
+
                     // Get the method instance and enable it
                     $methods = $zone->get_shipping_methods();
                     foreach ($methods as $method) {
@@ -228,16 +236,16 @@ class App
                             $method->update_option('enabled', 'yes');
                             $method->update_option('title', $method->method_title);
                             $method->save();
-                            error_log("✅ SuperFrete shipping method $method_id enabled in zone (Instance ID: $instance_id)");
+                            Logger::debug("Shipping method $method_id enabled in zone (Instance ID: $instance_id)", 'App');
                             break;
                         }
                     }
                 } else {
-                    error_log("❌ SuperFrete shipping method $method_id not registered yet");
+                    Logger::debug("Shipping method $method_id not registered yet", 'App');
                 }
             }
-        
-            error_log('✅ Zona de entrega "Brasil - SuperFrete" criada com o método ativado.');
+
+            Logger::debug('Zona de entrega "Brasil - SuperFrete" criada com o método ativado.', 'App');
         });
     }
 
@@ -251,17 +259,17 @@ class App
         foreach ($rates as $rate_id => $rate) {
             $original_order[] = $rate->label . ' - R$ ' . number_format(floatval($rate->cost), 2, ',', '.');
         }
-        error_log('SuperFrete: Original shipping order: ' . implode(' | ', $original_order));
+        Logger::debug('Original shipping order: ' . implode(' | ', $original_order), 'Shipping');
 
         // Reordena os métodos de frete pelo valor (crescente - do menor para o maior)
         uasort($rates, function ($a, $b) {
             $cost_a = floatval($a->cost);
             $cost_b = floatval($b->cost);
-            
+
             // Free shipping (cost = 0) should come first
             if ($cost_a == 0 && $cost_b > 0) return -1;
             if ($cost_b == 0 && $cost_a > 0) return 1;
-            
+
             // Both free or both paid - sort by cost ascending
             if ($cost_a == $cost_b) {
                 // If costs are equal, sort by delivery time (faster first)
@@ -269,7 +277,7 @@ class App
                 $time_b = isset($b->meta_data['delivery_time']) ? intval($b->meta_data['delivery_time']) : 999;
                 return $time_a <=> $time_b;
             }
-            
+
             return $cost_a <=> $cost_b;
         });
 
@@ -278,7 +286,7 @@ class App
         foreach ($rates as $rate_id => $rate) {
             $sorted_order[] = $rate->label . ' - R$ ' . number_format(floatval($rate->cost), 2, ',', '.');
         }
-        error_log('SuperFrete: Sorted shipping order: ' . implode(' | ', $sorted_order));
+        Logger::debug('Sorted shipping order: ' . implode(' | ', $sorted_order), 'Shipping');
 
         return $rates;
     }
@@ -413,15 +421,18 @@ class App
         // Add shipping sorting script on checkout
         if (is_checkout()) {
             add_action('wp_footer', [$this, 'add_shipping_sorting_script']);
-            
+
             // Enqueue document field script for checkout
-            wp_enqueue_script(
-                'superfrete-document-field',
-                plugin_dir_url(__FILE__) . '../assets/js/document-field.js',
-                ['jquery'],
-                '1.0.0',
-                true
-            );
+            // Skip if WooFunnels Aero Checkout is active (they have their own masking)
+            if (!$this->is_woofunnels_checkout_active()) {
+                wp_enqueue_script(
+                    'superfrete-document-field',
+                    plugin_dir_url(__FILE__) . '../assets/js/document-field.js',
+                    ['jquery'],
+                    '1.0.0',
+                    true
+                );
+            }
         }
         
         // Add theme customization support

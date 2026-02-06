@@ -346,6 +346,21 @@ class SuperFrete_Settings {
         ];
 
         $settings[] = [
+            'title'    => 'Modo Debug',
+            'desc'     => 'Ativar logs detalhados de debug',
+            'id'       => 'superfrete_debug_mode',
+            'type'     => 'select',
+            'default'  => get_option('superfrete_debug_mode', 'auto'),
+            'options'  => [
+                'auto'     => 'Automático (respeita WP_DEBUG)',
+                'enabled'  => 'Sempre ativado',
+                'disabled' => 'Sempre desativado',
+            ],
+            'desc_tip' => 'Controla a geração de logs de debug. "Automático" respeita a constante WP_DEBUG do WordPress. Logs de debug podem impactar a performance em produção.',
+            'class'    => 'superfrete-advanced-field'
+        ];
+
+        $settings[] = [
             'type'  => 'superfrete_webhook_status',
             'title' => 'Status dos Webhooks',
             'id'    => 'superfrete_webhook_status',
@@ -389,10 +404,11 @@ class SuperFrete_Settings {
                     $('#superfrete-advanced-toggle').on('click', function() {
                         // Target specific field IDs for advanced settings
                         var $sandboxField = $('#superfrete_sandbox_mode').closest('tr');
+                        var $debugField = $('#superfrete_debug_mode').closest('tr');
                         var $webhookField = $('.superfrete-advanced-field').closest('tr');
-                        var $advancedFields = $sandboxField.add($webhookField);
+                        var $advancedFields = $sandboxField.add($debugField).add($webhookField);
                         var $toggle = $(this).find('span');
-                        
+
                         if ($advancedFields.is(':visible')) {
                             $advancedFields.slideUp();
                             $toggle.text('▼ Mostrar Configurações Avançadas');
@@ -401,9 +417,10 @@ class SuperFrete_Settings {
                             $toggle.text('▲ Ocultar Configurações Avançadas');
                         }
                     });
-                    
+
                     // Initially hide advanced fields
                     // $('#superfrete_sandbox_mode').closest('tr').hide(); // Show sandbox mode by default
+                    $('#superfrete_debug_mode').closest('tr').hide();
                     $('.superfrete-advanced-field').closest('tr').hide();
                     
                     // Add OAuth functionality

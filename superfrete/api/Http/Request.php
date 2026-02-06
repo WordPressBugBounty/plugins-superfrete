@@ -15,7 +15,7 @@ class Request {
     public function __construct() {
         // Set API URL based on environment
         $use_dev_env = get_option('superfrete_sandbox_mode') === 'yes';
-        
+
         if ($use_dev_env) {
             $this->api_url = 'https://sandbox.superfrete.com/';
             $this->api_token = get_option('superfrete_api_token_sandbox');
@@ -23,11 +23,6 @@ class Request {
             $this->api_url = 'https://api.superfrete.com/';
             $this->api_token = get_option('superfrete_api_token');
         }
-        
-        // Debug logging
-        error_log('SuperFrete Request: API URL = ' . $this->api_url);
-        error_log('SuperFrete Request: Token present = ' . (!empty($this->api_token) ? 'yes' : 'no'));
-        error_log('SuperFrete Request: Use dev env = ' . ($use_dev_env ? 'yes' : 'no'));
     }
 
     /**
@@ -99,7 +94,7 @@ class Request {
 
             if ($method === 'POST' && !empty($payload)) {
                 $params['body'] = wp_json_encode($payload);
-                error_log('SuperFrete API Payload: ' . wp_json_encode($payload));
+                Logger::debug('API Payload: ' . wp_json_encode($payload), 'Request');
             }
 
             // Force timeout to prevent hosting overrides
@@ -145,8 +140,8 @@ class Request {
             remove_filter('http_request_timeout', $timeout_filter);
             remove_filter('http_request_args', $args_filter);
             $request_time = round(($end_time - $start_time) * 1000, 2);
-            
-            error_log('SuperFrete API Request Time: ' . $request_time . ' ms');
+
+            Logger::debug('API Request Time: ' . $request_time . ' ms', 'Request');
 
             // Check for WP errors first (timeout, connection issues, etc.)
             if (is_wp_error($response)) {
@@ -209,9 +204,9 @@ class Request {
                 }
                 
                 $diagnostic_json = wp_json_encode($diagnostics, JSON_PRETTY_PRINT);
-                
-                Logger::log('SuperFrete', "TIMEOUT DIAGNOSTICS:\n" . $diagnostic_json);
-                error_log('SuperFrete TIMEOUT DIAGNOSTICS: ' . $diagnostic_json);
+
+                Logger::log("TIMEOUT DIAGNOSTICS:\n" . $diagnostic_json, 'ERROR');
+                Logger::debug('TIMEOUT DIAGNOSTICS: ' . $diagnostic_json, 'Request');
                 
                 // Also log the original error message for backwards compatibility
                 Logger::log('SuperFrete', "WP Error na API ({$endpoint}): " . $error_message);
@@ -238,10 +233,10 @@ class Request {
 
             $status_code = wp_remote_retrieve_response_code($response);
             $raw_body = wp_remote_retrieve_body($response);
-            
+
             // Debug logging
-            error_log('SuperFrete API Response: Status = ' . $status_code);
-            error_log('SuperFrete API Response: Body = ' . substr($raw_body, 0, 500) . (strlen($raw_body) > 500 ? '...' : ''));
+            Logger::debug('API Response: Status = ' . $status_code, 'Request');
+            Logger::debug('API Response: Body = ' . substr($raw_body, 0, 500) . (strlen($raw_body) > 500 ? '...' : ''), 'Request');
 
             // Check for HTTP errors
             if (!in_array($status_code, [200, 201, 204])) {
@@ -270,8 +265,7 @@ class Request {
             
             // Check for JSON decode errors only if there's content to decode
             if (!empty($raw_body) && json_last_error() !== JSON_ERROR_NONE) {
-                Logger::log('SuperFrete', "JSON decode error na API ({$endpoint}): " . json_last_error_msg() . " - Raw response: " . substr($raw_body, 0, 200));
-                error_log('SuperFrete API JSON Error: ' . json_last_error_msg());
+                Logger::log("JSON decode error na API ({$endpoint}): " . json_last_error_msg() . " - Raw response: " . substr($raw_body, 0, 200), 'ERROR');
                 return false;
             }
 
@@ -279,8 +273,7 @@ class Request {
             if (isset($body['success']) && $body['success'] === false) {
                 $error_message = isset($body['message']) ? $body['message'] : 'Erro desconhecido';
                 $errors = $this->extract_api_errors($body);
-                Logger::log('SuperFrete', "API Error ({$endpoint}): {$error_message}\nDetalhes: {$errors}");
-                error_log('SuperFrete API Error: ' . $error_message . ' - Details: ' . $errors);
+                Logger::log("API Error ({$endpoint}): {$error_message}\nDetalhes: {$errors}", 'ERROR');
                 return false;
             }
 
@@ -288,8 +281,7 @@ class Request {
             return $body;
 
         } catch (Exception $exc) {
-            Logger::log('SuperFrete', "Exception na API ({$endpoint}): " . $exc->getMessage());
-            error_log('SuperFrete API Exception: ' . $exc->getMessage());
+            Logger::log("Exception na API ({$endpoint}): " . $exc->getMessage(), 'ERROR');
             return false;
         }
     }

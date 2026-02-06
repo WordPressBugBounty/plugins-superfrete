@@ -2,6 +2,7 @@
 
 namespace SuperFrete_API\Controllers;
 
+use SuperFrete_API\Helpers\Logger;
 use WP_REST_Server;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -28,11 +29,8 @@ class OAuthController
      */
     public function register_routes()
     {
-        // Add debug logging
-        error_log('SuperFrete OAuth: Registering REST API routes');
-        
         // Proxy endpoint for polling OAuth token
-        $result = register_rest_route('superfrete/v1', '/oauth/token', [
+        register_rest_route('superfrete/v1', '/oauth/token', [
             'methods' => WP_REST_Server::READABLE,
             'callback' => [$this, 'proxy_oauth_token'],
             'permission_callback' => '__return_true', // Temporarily allow all for debugging
@@ -44,12 +42,6 @@ class OAuthController
                 ]
             ]
         ]);
-        
-        if ($result) {
-            error_log('SuperFrete OAuth: REST route registered successfully');
-        } else {
-            error_log('SuperFrete OAuth: Failed to register REST route');
-        }
     }
     
     /**
@@ -57,33 +49,33 @@ class OAuthController
      */
     public function ajax_oauth_proxy()
     {
-        error_log('SuperFrete OAuth: AJAX proxy called');
-        
+        Logger::debug('AJAX proxy called', 'OAuth');
+
         // Check nonce for security
         if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'wp_rest')) {
             wp_send_json_error('Invalid nonce');
             return;
         }
-        
+
         $session_id = sanitize_text_field($_GET['session_id'] ?? '');
-        error_log('SuperFrete OAuth: AJAX session_id = ' . $session_id);
-        
+        Logger::debug('AJAX session_id = ' . $session_id, 'OAuth');
+
         if (empty($session_id)) {
             wp_send_json_error('Session ID is required');
             return;
         }
-        
+
         // Get the headless API URL from settings
         $api_url = $this->get_headless_api_url();
         if (!$api_url) {
             wp_send_json_error('Headless API URL not configured');
             return;
         }
-        
+
         // Make server-side request to headless API
         $url = $api_url . '/headless/oauth/token?session_id=' . urlencode($session_id);
-        error_log('SuperFrete OAuth: AJAX calling URL = ' . $url);
-        
+        Logger::debug('AJAX calling URL = ' . $url, 'OAuth');
+
         $response = wp_remote_get($url, [
             'timeout' => 30,
             'headers' => [
@@ -91,26 +83,26 @@ class OAuthController
                 'User-Agent' => 'SuperFrete-WordPress-Plugin/2.1.4'
             ]
         ]);
-        
+
         if (is_wp_error($response)) {
-            error_log('SuperFrete OAuth: AJAX wp_remote_get error = ' . $response->get_error_message());
+            Logger::debug('AJAX wp_remote_get error = ' . $response->get_error_message(), 'OAuth');
             wp_send_json_error('Failed to connect to headless API: ' . $response->get_error_message());
             return;
         }
-        
+
         $status_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
-        
-        error_log('SuperFrete OAuth: AJAX response status = ' . $status_code);
-        error_log('SuperFrete OAuth: AJAX response body = ' . $body);
-        
+
+        Logger::debug('AJAX response status = ' . $status_code, 'OAuth');
+        Logger::debug('AJAX response body = ' . $body, 'OAuth');
+
         // Try to decode JSON response
         $data = json_decode($body, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             wp_send_json_error('Invalid JSON response from API');
             return;
         }
-        
+
         // Return the data
         wp_send_json($data);
     }
@@ -123,13 +115,13 @@ class OAuthController
      */
     public function proxy_oauth_token(WP_REST_Request $request)
     {
-        error_log('SuperFrete OAuth: proxy_oauth_token called');
-        
+        Logger::debug('proxy_oauth_token called', 'OAuth');
+
         $session_id = $request->get_param('session_id');
-        error_log('SuperFrete OAuth: session_id = ' . $session_id);
-        
+        Logger::debug('session_id = ' . $session_id, 'OAuth');
+
         if (empty($session_id)) {
-            error_log('SuperFrete OAuth: Missing session_id');
+            Logger::debug('Missing session_id', 'OAuth');
             return new WP_Error('missing_session_id', 'Session ID is required', ['status' => 400]);
         }
         
@@ -176,19 +168,18 @@ class OAuthController
     {
         // Check if we're in sandbox mode
         $sandbox_mode = get_option('superfrete_sandbox_mode', 'no');
-        
-        // Debug logging
-        error_log('SuperFrete OAuth: sandbox_mode setting = ' . $sandbox_mode);
-        
+
+        Logger::debug('sandbox_mode setting = ' . $sandbox_mode, 'OAuth');
+
         if ($sandbox_mode === 'yes') {
             // Development/sandbox environment
             $api_url = 'https://api.dev.superintegrador.superfrete.com';
-            error_log('SuperFrete OAuth: Using dev API = ' . $api_url);
+            Logger::debug('Using dev API = ' . $api_url, 'OAuth');
             return $api_url;
         } else {
             // Production environment
             $api_url = 'https://api.superintegrador.superfrete.com';
-            error_log('SuperFrete OAuth: Using production API = ' . $api_url);
+            Logger::debug('Using production API = ' . $api_url, 'OAuth');
             return $api_url;
         }
     }

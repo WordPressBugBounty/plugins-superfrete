@@ -2,6 +2,7 @@
 
 namespace SuperFrete_API\Controllers;
 
+use SuperFrete_API\Helpers\Logger;
 use SuperFrete_API\Http\Request;
 use WC_Shipping_Zones;
 
@@ -170,6 +171,9 @@ class ProductShipping {
                             'city' => $destination_city,
                         ],
                         'cart_subtotal' => $product->get_price() * $quantity,
+                        // Add custom field to indicate this is a product page calculation with specific quantity
+                        'superfrete_product_calc' => true,
+                        'superfrete_requested_quantity' => $quantity,
                     ];
                     
                     $log_data['steps']['prepare_package'] = round((microtime(true) - $step_start) * 1000, 2) . ' ms';
@@ -391,9 +395,9 @@ class ProductShipping {
             
             // Add log data to the return for debugging
             $return['performance_log'] = $log_data;
-            
-            // Log to the WordPress error log
-            error_log('SuperFrete Performance Log: ' . wp_json_encode($log_data));
+
+            // Log performance data
+            Logger::debug('Performance Log: ' . wp_json_encode($log_data), 'ProductShipping');
             
             echo wp_json_encode($return);
         }
@@ -447,14 +451,8 @@ class ProductShipping {
     }
 
     static function addProductToCart($product_id, $variation_id, $quantity = 1) {
-        $consider_product_quantity = apply_filters('superfrete_ppscw_consider_quantity_in_shipping_calculation', get_option('superfrete_consider_quantity_field', 'dont-consider-quantity-field'), $product_id, $variation_id, $quantity);
-
-        if ($consider_product_quantity == 'dont-consider-quantity-field') {
-            if (self::productExistInCart($product_id, $variation_id))
-                return "";
-            $quantity = 1;
-        }
-
+        // Always use the actual quantity - removed the broken quantity override logic
+        
         if (!empty($variation_id)) {
             $variation = self::getVariationAttributes($variation_id);
         } else {

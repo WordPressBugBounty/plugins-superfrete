@@ -4,7 +4,7 @@ Tags: WooCommerce, Shipping, Frete, Logística
 Requires at least: 5.6
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 3.3.2
+Stable tag: 3.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -70,6 +70,13 @@ Principais funcionalidades:
 Caso tenha dúvidas ou precise de suporte, entre em contato através do e-mail integracao@superfrete.com
 
 == Changelog ==
+
+= 3.3.3 =
+* **Logs Otimizados:** Substituído error_log() por sistema de Logger condicional
+* **Modo Debug Configurável:** Nova opção em Configurações Avançadas para controlar logs de debug
+* **Respeita WP_DEBUG:** Logs de debug só são gerados quando WP_DEBUG está ativo ou modo debug habilitado
+* **Performance em Produção:** Removidos logs de inicialização que poluíam o error_log a cada requisição
+* **Logs de Eventos Preservados:** Mantidos logs úteis para checkout, validação e erros de API
 
 = 3.3.1 =
 

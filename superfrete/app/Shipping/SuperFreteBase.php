@@ -152,13 +152,11 @@ abstract class SuperFreteBase extends \WC_Shipping_Method {
             // Make API call for ALL services
             $response = $this->call_superfrete_api($package);
             
-            // Cache the response only if successful and contains valid data
-            if ($response && $this->is_valid_response($response)) {
+            // Cache the response if successful
+            if ($response) {
                 $this->cache_response($cache_key, $response);
                 self::$api_response_cache[$cache_key] = $response;
                 Logger::log('SuperFrete', 'Cached new shipping rates for ' . $this->id . ' CEP: ' . $destination_cep);
-            } elseif ($response) {
-                Logger::log('SuperFrete', 'NOT caching response due to errors for ' . $this->id . ' CEP: ' . $destination_cep);
             }
         } else {
             Logger::log('SuperFrete', 'Cache HIT for ' . $this->id . ' CEP: ' . $destination_cep);
@@ -184,15 +182,14 @@ abstract class SuperFreteBase extends \WC_Shipping_Method {
                 continue;
             }
 
-            // Check for errors - with detailed logging
+            // Check for errors
             if (isset($frete['has_error']) && $frete['has_error']) {
-                Logger::log('SuperFrete', $this->id . ' has error flag set: ' . wp_json_encode($frete));
+                Logger::log('SuperFrete', $this->id . ' has error flag set');
                 continue;
             }
 
             if (isset($frete['error'])) {
-                $error_msg = is_string($frete['error']) ? $frete['error'] : wp_json_encode($frete['error']);
-                Logger::log('SuperFrete', $this->id . ' HAS ERROR: "' . $error_msg . '"');
+                Logger::log('SuperFrete', $this->id . ' has error: ' . wp_json_encode($frete['error']));
                 continue;
             }
 
@@ -263,36 +260,13 @@ abstract class SuperFreteBase extends \WC_Shipping_Method {
             $weight_unit = get_option('woocommerce_weight_unit');
             $dimension_unit = get_option('woocommerce_dimension_unit');
 
-            // Convert and validate product dimensions
-            $weight = ($weight_unit === 'g') ? floatval($product->get_weight()) / 1000 : floatval($product->get_weight());
-            $height = ($dimension_unit === 'm') ? floatval($product->get_height()) * 100 : floatval($product->get_height());
-            $width = ($dimension_unit === 'm') ? floatval($product->get_width()) * 100 : floatval($product->get_width());
-            $length = ($dimension_unit === 'm') ? floatval($product->get_length()) * 100 : floatval($product->get_length());
-            
-            // Apply minimum values to prevent API errors
-            $weight = max($weight, 0.1); // Minimum 0.1kg
-            $height = max($height, 1.0); // Minimum 1cm
-            $width = max($width, 1.0);   // Minimum 1cm
-            $length = max($length, 1.0); // Minimum 1cm
-
             $produtos[] = [
-                'quantity' => max(intval($item['quantity']), 1),
-                'weight' => round($weight, 3),
-                'height' => round($height, 1),
-                'width' => round($width, 1),
-                'length' => round($length, 1),
+                'quantity' => $item['quantity'],
+                'weight' => ($weight_unit === 'g') ? floatval($product->get_weight()) / 1000 : floatval($product->get_weight()),
+                'height' => ($dimension_unit === 'm') ? floatval($product->get_height()) * 100 : floatval($product->get_height()),
+                'width' => ($dimension_unit === 'm') ? floatval($product->get_width()) * 100 : floatval($product->get_width()),
+                'length' => ($dimension_unit === 'm') ? floatval($product->get_length()) * 100 : floatval($product->get_length()),
             ];
-        }
-
-        // Validate required data before API call
-        if (empty($produtos)) {
-            Logger::log('SuperFrete', 'No valid products found for shipping calculation');
-            return false;
-        }
-        
-        if (empty($cep_origem) || empty($cep_destino)) {
-            Logger::log('SuperFrete', 'Missing origin or destination postal code');
-            return false;
         }
 
         // Request all services at once for better performance
@@ -312,7 +286,6 @@ abstract class SuperFreteBase extends \WC_Shipping_Method {
         ];
 
         Logger::log('SuperFrete', 'Making consolidated API call for all services to CEP: ' . $cep_destino . ' (cleaned from: ' . $package['destination']['postcode'] . ')');
-        Logger::log('SuperFrete', 'Payload products: ' . wp_json_encode($produtos));
         
         $request = new Request();
         $response = $request->call_superfrete_api('/api/v0/calculator', 'POST', $payload);
@@ -459,27 +432,6 @@ abstract class SuperFreteBase extends \WC_Shipping_Method {
         // Store in WordPress transients for persistence
         $transient_key = self::$persistent_cache_key . '_' . md5($cache_key);
         set_transient($transient_key, $response, self::$cache_duration);
-    }
-
-    /**
-     * Validate if API response is cacheable (no errors)
-     */
-    private function is_valid_response($response) {
-        if (!is_array($response)) {
-            return false;
-        }
-        
-        // Check if any service has errors
-        foreach ($response as $service) {
-            if (isset($service['has_error']) && $service['has_error']) {
-                return false;
-            }
-            if (isset($service['error']) && !empty($service['error'])) {
-                return false;
-            }
-        }
-        
-        return true;
     }
 
     /**

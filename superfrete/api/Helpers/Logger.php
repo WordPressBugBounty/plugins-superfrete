@@ -15,12 +15,12 @@ class Logger {
      */
     public static function init() {
         if (!self::$log_file) {
-$upload_dir = wp_upload_dir();
-self::$log_file = trailingslashit($upload_dir['basedir']) . 'superfrete.log';
+            $upload_dir = wp_upload_dir();
+            self::$log_file = trailingslashit($upload_dir['basedir']) . 'superfrete.log';
 
             // Garante que a pasta de logs exista
             $log_dir = dirname(self::$log_file);
-          
+
             if (!file_exists($log_dir)) {
                 mkdir($log_dir, 0755, true);
             }
@@ -28,12 +28,39 @@ self::$log_file = trailingslashit($upload_dir['basedir']) . 'superfrete.log';
     }
 
     /**
+     * Verifica se o modo debug está ativado.
+     * Respeita WP_DEBUG ou a opção superfrete_debug_mode.
+     *
+     * @return bool
+     */
+    public static function is_debug_enabled() {
+        // Permite ativar via opção do WordPress (para controle independente)
+        $debug_option = get_option('superfrete_debug_mode', 'auto');
+
+        if ($debug_option === 'enabled') {
+            return true;
+        }
+
+        if ($debug_option === 'disabled') {
+            return false;
+        }
+
+        // Modo 'auto': respeita WP_DEBUG
+        return defined('WP_DEBUG') && WP_DEBUG;
+    }
+
+    /**
      * Registra uma mensagem no log.
      *
      * @param string|array $message Mensagem a ser registrada (pode ser string ou array para JSON).
-     * @param string $level Nível do log (INFO, WARNING, ERROR).
+     * @param string $level Nível do log (DEBUG, INFO, WARNING, ERROR).
      */
     public static function log($message, $level = 'ERROR') {
+        // DEBUG logs só são registrados se debug estiver habilitado
+        if (strtoupper($level) === 'DEBUG' && !self::is_debug_enabled()) {
+            return;
+        }
+
         self::init();
 
         // Se for um array (como uma resposta da API), converte para JSON formatado
@@ -45,8 +72,21 @@ self::$log_file = trailingslashit($upload_dir['basedir']) . 'superfrete.log';
         }
 
         $log_entry = sprintf("[%s] [%s] %s\n", date("Y-m-d H:i:s"), strtoupper($level), $message);
-      file_put_contents(self::$log_file, $log_entry, FILE_APPEND);  
-    
+        file_put_contents(self::$log_file, $log_entry, FILE_APPEND);
+    }
+
+    /**
+     * Registra uma mensagem de debug.
+     * Só será registrada se WP_DEBUG estiver ativo ou superfrete_debug_mode = 'enabled'.
+     *
+     * @param string|array $message Mensagem a ser registrada.
+     * @param string $context Contexto opcional para prefixar a mensagem.
+     */
+    public static function debug($message, $context = '') {
+        if ($context) {
+            $message = "[$context] $message";
+        }
+        self::log($message, 'DEBUG');
     }
 
     /** 

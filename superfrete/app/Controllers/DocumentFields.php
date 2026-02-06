@@ -2,6 +2,8 @@
 
 namespace SuperFrete_API\Controllers;
 
+use SuperFrete_API\Helpers\Logger;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -10,29 +12,69 @@ class DocumentFields
 {
     public function __construct()
     {
-        error_log('SuperFrete DocumentFields: Constructor called - adding both classic and blocks support');
-        
         // Classic checkout support
         add_filter('woocommerce_billing_fields', array($this, 'checkout_billing_fields'), 10);
         add_filter('woocommerce_checkout_fields', array($this, 'add_document_to_checkout_fields'), 10);
+        add_filter('woocommerce_checkout_posted_data', array($this, 'merge_woofunnels_document_data'), 5);
         add_action('woocommerce_checkout_process', array($this, 'valid_checkout_fields'), 10);
         add_action('woocommerce_checkout_update_order_meta', array($this, 'save_document_field'));
-        
+
         // WooCommerce Blocks support
         add_action('woocommerce_blocks_loaded', array($this, 'register_checkout_field_block'));
         add_action('woocommerce_store_api_checkout_update_customer_from_request', array($this, 'save_document_from_blocks'), 10, 2);
         add_action('woocommerce_rest_checkout_process_payment', array($this, 'validate_document_in_blocks'), 10, 2);
         add_action('woocommerce_checkout_order_processed', array($this, 'save_document_from_checkout_blocks'), 10, 3);
         add_action('woocommerce_store_api_checkout_order_data', array($this, 'save_document_from_store_api'), 10, 2);
-        
+
         // Display in admin and customer areas
         add_action('woocommerce_admin_order_data_after_billing_address', array($this, 'display_document_in_admin'));
         add_action('woocommerce_order_details_after_customer_details', array($this, 'display_document_in_order'));
-        
-        // Add action to check what type of checkout is being used
-        add_action('wp_footer', array($this, 'debug_checkout_type'));
-        
-        error_log('SuperFrete DocumentFields: All hooks added for both classic and blocks checkout');
+    }
+
+    /**
+     * Check if WooFunnels Aero Checkout is active
+     */
+    private function is_woofunnels_active()
+    {
+        return class_exists('WFACP_Common') || class_exists('WFACP_Template_Common');
+    }
+
+    /**
+     * Merge WooFunnels billing_cpf/billing_cnpj data into billing_document
+     * This runs before validation to ensure SuperFrete can read the document
+     */
+    public function merge_woofunnels_document_data($data)
+    {
+        if (!$this->is_woofunnels_active()) {
+            return $data;
+        }
+
+        Logger::debug('WooFunnels detected, checking for billing_cpf/billing_cnpj fields', 'DocumentFields');
+
+        // If billing_document already has a value, don't override it
+        if (!empty($data['billing_document'])) {
+            Logger::debug('billing_document already set: ' . $data['billing_document'], 'DocumentFields');
+            return $data;
+        }
+
+        // Check for CPF field (individuals)
+        if (!empty($_POST['billing_cpf'])) {
+            $cpf = sanitize_text_field($_POST['billing_cpf']);
+            $data['billing_document'] = $cpf;
+            Logger::debug('Merged billing_cpf into billing_document: ' . $cpf, 'DocumentFields');
+            return $data;
+        }
+
+        // Check for CNPJ field (legal entities)
+        if (!empty($_POST['billing_cnpj'])) {
+            $cnpj = sanitize_text_field($_POST['billing_cnpj']);
+            $data['billing_document'] = $cnpj;
+            Logger::debug('Merged billing_cnpj into billing_document: ' . $cnpj, 'DocumentFields');
+            return $data;
+        }
+
+        Logger::debug('No billing_cpf or billing_cnpj found in WooFunnels checkout', 'DocumentFields');
+        return $data;
     }
 
     /**
@@ -40,8 +82,6 @@ class DocumentFields
      */
     public function checkout_billing_fields($fields)
     {
-        error_log('SuperFrete DocumentFields: checkout_billing_fields called with ' . count($fields) . ' fields');
-        
         $new_fields = array();
 
         // Keep existing fields first
@@ -63,7 +103,6 @@ class DocumentFields
             )
         );
 
-        error_log('SuperFrete DocumentFields: Document field added to billing fields');
         return $new_fields;
     }
 
@@ -72,8 +111,6 @@ class DocumentFields
      */
     public function add_document_to_checkout_fields($fields)
     {
-        error_log('SuperFrete DocumentFields: add_document_to_checkout_fields called');
-        
         if (isset($fields['billing'])) {
             $fields['billing']['billing_document'] = array(
                 'label'    => __('CPF/CNPJ', 'superfrete'),
@@ -87,33 +124,18 @@ class DocumentFields
                     'maxlength' => '18'
                 )
             );
-            error_log('SuperFrete DocumentFields: Document field added via checkout_fields hook');
         }
-        
+
         return $fields;
     }
 
     /**
-     * Debug what type of checkout is being used
+     * Debug what type of checkout is being used (only logs when explicitly called for debugging)
      */
     public function debug_checkout_type()
     {
-        if (is_checkout()) {
-            error_log('SuperFrete DocumentFields: On checkout page - checking for blocks');
-            
-            // Check if blocks checkout is being used
-            if (has_block('woocommerce/checkout')) {
-                error_log('SuperFrete DocumentFields: WooCommerce Blocks checkout detected');
-            } else {
-                error_log('SuperFrete DocumentFields: Classic checkout detected');
-            }
-            
-            // Also check for checkout shortcode
-            global $post;
-            if ($post && has_shortcode($post->post_content, 'woocommerce_checkout')) {
-                error_log('SuperFrete DocumentFields: Checkout shortcode found');
-            }
-        }
+        // This function is kept for manual debugging but doesn't log automatically
+        // to avoid polluting logs on every page load
     }
 
     /**
@@ -121,8 +143,6 @@ class DocumentFields
      */
     public function register_checkout_field_block()
     {
-        error_log('SuperFrete DocumentFields: Registering blocks checkout field using new Checkout Field API');
-        
         // Use the new WooCommerce 8.6+ Checkout Field API
         if (function_exists('woocommerce_register_additional_checkout_field')) {
             woocommerce_register_additional_checkout_field(array(
@@ -139,11 +159,8 @@ class DocumentFields
                 'validate_callback' => array($this, 'validate_document_callback'),
                 'sanitize_callback' => 'sanitize_text_field',
             ));
-            
-            error_log('SuperFrete DocumentFields: Document field registered using Checkout Field API');
         } else {
-            error_log('SuperFrete DocumentFields: Checkout Field API not available, trying legacy Store API approach');
-            
+
             // Fallback to legacy Store API approach
             if (function_exists('woocommerce_store_api_register_endpoint_data')) {
                 woocommerce_store_api_register_endpoint_data(array(
@@ -161,16 +178,16 @@ class DocumentFields
      */
     public function validate_document_callback($field_value, $errors)
     {
-        error_log('SuperFrete DocumentFields: Validating document via Checkout Field API: ' . $field_value);
-        
+        Logger::debug('Validating document via Checkout Field API: ' . $field_value, 'DocumentFields');
+
         if (empty($field_value)) {
             return new \WP_Error('superfrete_document_required', __('CPF/CNPJ é um campo obrigatório.', 'superfrete'));
         }
-        
+
         if (!$this->is_valid_document($field_value)) {
             return new \WP_Error('superfrete_document_invalid', __('CPF/CNPJ não é válido.', 'superfrete'));
         }
-        
+
         return true;
     }
 
@@ -204,8 +221,8 @@ class DocumentFields
      */
     public function save_document_from_blocks($customer, $request)
     {
-        error_log('SuperFrete DocumentFields: Saving document from blocks');
-        
+        Logger::debug('Saving document from blocks', 'DocumentFields');
+
         $document = $request->get_param('billing_document');
         if ($document) {
             $customer->update_meta_data('billing_document', sanitize_text_field($document));
@@ -217,7 +234,7 @@ class DocumentFields
      */
     public function validate_document_in_blocks($request, $errors)
     {
-        error_log('SuperFrete DocumentFields: Validating document in blocks');
+        Logger::debug('Validating document in blocks', 'DocumentFields');
         
         $document = $request->get_param('billing_document');
         if (empty($document)) {
@@ -232,44 +249,44 @@ class DocumentFields
      */
     public function save_document_from_checkout_blocks($order_id, $posted_data, $order)
     {
-        error_log('SuperFrete DocumentFields: save_document_from_checkout_blocks called for order ' . $order_id);
-        error_log('SuperFrete DocumentFields: Posted data keys: ' . implode(', ', array_keys($posted_data)));
-        
+        Logger::debug('save_document_from_checkout_blocks called for order ' . $order_id, 'DocumentFields');
+        Logger::debug('Posted data keys: ' . implode(', ', array_keys($posted_data)), 'DocumentFields');
+
         // Try to find the document field in posted data
         $document = '';
-        
+
         // Check various possible field names for blocks checkout
         $possible_keys = array(
             'superfrete/document',
-            'superfrete--document', 
+            'superfrete--document',
             'billing_document',
             'extensions',
         );
-        
+
         foreach ($possible_keys as $key) {
             if (isset($posted_data[$key])) {
                 if ($key === 'extensions' && is_array($posted_data[$key])) {
                     // Look for our field in extensions array
                     if (isset($posted_data[$key]['superfrete']) && isset($posted_data[$key]['superfrete']['document'])) {
                         $document = sanitize_text_field($posted_data[$key]['superfrete']['document']);
-                        error_log('SuperFrete DocumentFields: Found document in extensions: ' . $document);
+                        Logger::debug('Found document in extensions: ' . $document, 'DocumentFields');
                         break;
                     }
                 } else {
                     $document = sanitize_text_field($posted_data[$key]);
-                    error_log('SuperFrete DocumentFields: Found document in ' . $key . ': ' . $document);
+                    Logger::debug('Found document in ' . $key . ': ' . $document, 'DocumentFields');
                     break;
                 }
             }
         }
-        
+
         if (!empty($document)) {
             $order->update_meta_data('_billing_document', $document);
             $order->update_meta_data('_superfrete_document', $document);
             $order->save();
-            error_log('SuperFrete DocumentFields: Document saved from blocks checkout: ' . $document);
+            Logger::debug('Document saved from blocks checkout: ' . $document, 'DocumentFields');
         } else {
-            error_log('SuperFrete DocumentFields: No document found in blocks checkout data');
+            Logger::debug('No document found in blocks checkout data', 'DocumentFields');
         }
     }
 
@@ -278,48 +295,48 @@ class DocumentFields
      */
     public function save_document_from_store_api($order_data, $request)
     {
-        error_log('SuperFrete DocumentFields: save_document_from_store_api called');
-        error_log('SuperFrete DocumentFields: Order data keys: ' . implode(', ', array_keys($order_data)));
-        
+        Logger::debug('save_document_from_store_api called', 'DocumentFields');
+        Logger::debug('Order data keys: ' . implode(', ', array_keys($order_data)), 'DocumentFields');
+
         // Check if our field is in the request
         $document_value = '';
-        
+
         // Try to get the field value from various possible locations
         if (method_exists($request, 'get_param')) {
             $extensions = $request->get_param('extensions');
             if (is_array($extensions) && isset($extensions['superfrete']) && isset($extensions['superfrete']['document'])) {
                 $document_value = sanitize_text_field($extensions['superfrete']['document']);
-                error_log('SuperFrete DocumentFields: Found document in extensions: ' . $document_value);
+                Logger::debug('Found document in extensions: ' . $document_value, 'DocumentFields');
             }
-            
+
             // Also try direct parameter
             $direct_value = $request->get_param('superfrete/document');
             if ($direct_value) {
                 $document_value = sanitize_text_field($direct_value);
-                error_log('SuperFrete DocumentFields: Found document in direct param: ' . $document_value);
+                Logger::debug('Found document in direct param: ' . $document_value, 'DocumentFields');
             }
         }
-        
+
         // If we found a document value, add it to the order data meta
         if (!empty($document_value)) {
             if (!isset($order_data['meta_data'])) {
                 $order_data['meta_data'] = array();
             }
-            
+
             $order_data['meta_data'][] = array(
                 'key' => '_billing_document',
                 'value' => $document_value
             );
             $order_data['meta_data'][] = array(
-                'key' => '_superfrete_document', 
+                'key' => '_superfrete_document',
                 'value' => $document_value
             );
-            
-            error_log('SuperFrete DocumentFields: Added document to order meta data: ' . $document_value);
+
+            Logger::debug('Added document to order meta data: ' . $document_value, 'DocumentFields');
         } else {
-            error_log('SuperFrete DocumentFields: No document found in Store API request');
+            Logger::debug('No document found in Store API request', 'DocumentFields');
         }
-        
+
         return $order_data;
     }
 
@@ -328,15 +345,32 @@ class DocumentFields
      */
     public function valid_checkout_fields()
     {
-        error_log('SuperFrete DocumentFields: valid_checkout_fields called');
-        
-        if (empty($_POST['billing_document'])) {
+        Logger::debug('valid_checkout_fields called', 'DocumentFields');
+
+        $document = '';
+
+        // Try to get document from billing_document first (standard or merged from WooFunnels)
+        if (!empty($_POST['billing_document'])) {
+            $document = sanitize_text_field($_POST['billing_document']);
+        }
+
+        // Fallback: Check WooFunnels CPF field
+        if (empty($document) && !empty($_POST['billing_cpf'])) {
+            $document = sanitize_text_field($_POST['billing_cpf']);
+            Logger::debug('Using billing_cpf for validation: ' . $document, 'DocumentFields');
+        }
+
+        // Fallback: Check WooFunnels CNPJ field
+        if (empty($document) && !empty($_POST['billing_cnpj'])) {
+            $document = sanitize_text_field($_POST['billing_cnpj']);
+            Logger::debug('Using billing_cnpj for validation: ' . $document, 'DocumentFields');
+        }
+
+        if (empty($document)) {
             wc_add_notice(sprintf('<strong>%s</strong> %s.', __('CPF/CNPJ', 'superfrete'), __('é um campo obrigatório', 'superfrete')), 'error');
             return;
         }
 
-        $document = sanitize_text_field($_POST['billing_document']);
-        
         if (!$this->is_valid_document($document)) {
             wc_add_notice(sprintf('<strong>%s</strong> %s.', __('CPF/CNPJ', 'superfrete'), __('não é válido', 'superfrete')), 'error');
         }
@@ -347,40 +381,52 @@ class DocumentFields
      */
     public function save_document_field($order_id)
     {
-        error_log('SuperFrete DocumentFields: save_document_field called for order ' . $order_id);
-        
+        Logger::debug('save_document_field called for order ' . $order_id, 'DocumentFields');
+
         // Handle both classic checkout and blocks checkout
         $document = '';
-        
+
         // Try to get from POST (classic checkout)
         if (!empty($_POST['billing_document'])) {
             $document = sanitize_text_field($_POST['billing_document']);
-            error_log('SuperFrete DocumentFields: Document from POST: ' . $document);
+            Logger::debug('Document from POST billing_document: ' . $document, 'DocumentFields');
         }
-        
+
         // Try to get from blocks checkout field
         if (empty($document) && !empty($_POST['superfrete--document'])) {
             $document = sanitize_text_field($_POST['superfrete--document']);
-            error_log('SuperFrete DocumentFields: Document from blocks field: ' . $document);
+            Logger::debug('Document from blocks field: ' . $document, 'DocumentFields');
         }
-        
+
         // Also try the namespaced field format
         if (empty($document) && !empty($_POST['superfrete/document'])) {
             $document = sanitize_text_field($_POST['superfrete/document']);
-            error_log('SuperFrete DocumentFields: Document from namespaced field: ' . $document);
+            Logger::debug('Document from namespaced field: ' . $document, 'DocumentFields');
         }
-        
+
+        // Try WooFunnels CPF field
+        if (empty($document) && !empty($_POST['billing_cpf'])) {
+            $document = sanitize_text_field($_POST['billing_cpf']);
+            Logger::debug('Document from WooFunnels billing_cpf: ' . $document, 'DocumentFields');
+        }
+
+        // Try WooFunnels CNPJ field
+        if (empty($document) && !empty($_POST['billing_cnpj'])) {
+            $document = sanitize_text_field($_POST['billing_cnpj']);
+            Logger::debug('Document from WooFunnels billing_cnpj: ' . $document, 'DocumentFields');
+        }
+
         if (!empty($document)) {
             $order = wc_get_order($order_id);
             if ($order) {
                 $order->update_meta_data('_billing_document', $document);
                 $order->update_meta_data('_superfrete_document', $document);
                 $order->save();
-                error_log('SuperFrete DocumentFields: Document saved to order meta: ' . $document);
+                Logger::debug('Document saved to order meta: ' . $document, 'DocumentFields');
             }
         } else {
-            error_log('SuperFrete DocumentFields: No document found in POST data');
-            error_log('SuperFrete DocumentFields: POST keys: ' . implode(', ', array_keys($_POST)));
+            Logger::debug('No document found in POST data', 'DocumentFields');
+            Logger::debug('POST keys: ' . implode(', ', array_keys($_POST)), 'DocumentFields');
         }
     }
 
