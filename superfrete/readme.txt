@@ -4,7 +4,7 @@ Tags: WooCommerce, Shipping, Frete, Logística
 Requires at least: 5.6
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 3.3.3
+Stable tag: 3.3.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -70,6 +70,14 @@ Principais funcionalidades:
 Caso tenha dúvidas ou precise de suporte, entre em contato através do e-mail integracao@superfrete.com
 
 == Changelog ==
+
+= 3.3.4 =
+* **Exibição de Limite de Etiquetas:** Card do pedido agora mostra "Etiquetas a postar" e "Limite disponível" do usuário SuperFrete
+* **Aviso de Limite Atingido:** Quando o limite é excedido, exibe aviso em destaque com botão para aumentar o limite
+* **Bloqueio de Pagamento:** Oculta o botão "Pagar Etiqueta" quando o limite de etiquetas foi atingido, evitando cobrança sem possibilidade de emissão
+* **Cache de Cálculo de Frete:** Cache invalidado automaticamente ao alterar quantidades no carrinho
+* **Cálculo por Quantidade na Página do Produto:** Correção no cálculo de frete considerando a quantidade selecionada na página do produto
+* **Tratamento de Erros:** Melhor tratamento de respostas com erro para evitar cache de resultados inválidos
 
 = 3.3.3 =
 * **Logs Otimizados:** Substituído error_log() por sistema de Logger condicional

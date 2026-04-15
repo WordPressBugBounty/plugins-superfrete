@@ -147,7 +147,9 @@ class SuperFrete_OrderActions
             wp_die();
         }
 
-        $saldo = $this->get_superfrete_balance();
+        $user_info = $this->get_superfrete_user_info();
+        $saldo = $user_info['balance'];
+        $limits = $user_info['limits'];
         $superfrete_status = $this->get_superfrete_data($etiqueta_id)['status'];
         $superfrete_tracking = $this->get_superfrete_data($etiqueta_id)['tracking'];
 
@@ -155,13 +157,30 @@ class SuperFrete_OrderActions
 
         echo "<p><strong>" . esc_html__('Saldo na SuperFrete:', 'superfrete') . "</strong> R$ " . esc_html(number_format($saldo, 2, ',', '.')) . "</p>";
         echo "<p><strong>" . esc_html__('Valor da Etiqueta:', 'superfrete') . "</strong> R$ " . esc_html(number_format($valor_frete, 2, ',', '.')) . "</p>";
+
+        $limit_reached = false;
+        if ($limits !== null) {
+            $shipments = isset($limits['shipments']) ? intval($limits['shipments']) : 0;
+            $shipments_available = isset($limits['shipments_available']) ? intval($limits['shipments_available']) : 0;
+            echo "<p><strong>" . esc_html__('Etiquetas a postar:', 'superfrete') . "</strong> " . esc_html($shipments) . "</p>";
+            echo "<p><strong>" . esc_html__('Limite disponível:', 'superfrete') . "</strong> " . esc_html($shipments_available) . "</p>";
+
+            if ($shipments_available <= 0) {
+                $limit_reached = true;
+                $web_url = $this->get_superfrete_web_url();
+                echo '<p style="color: red; font-weight: bold;">' . esc_html__('Você atingiu o limite de etiquetas.', 'superfrete') . '</p>';
+                echo '<a href="' . esc_url($web_url . '/#/limit-increase') . '" target="_blank" class="button button-secondary" style="margin-bottom: 8px;">' . esc_html__('Aumentar Limite', 'superfrete') . '</a><br>';
+            }
+        }
         if ($superfrete_status == 'released') {
             echo '<p>' . esc_html__('Status da Etiqueta: ', 'superfrete') . ' <strong>' . esc_html__('Emitida', 'superfrete') . '</strong></p>';
             echo '<a href="' . esc_url($this->get_ticket_superfrete($order_id)) . '" target="_blank" class="button button-secondary">' . esc_html__('Imprimir Etiqueta', 'superfrete') . '</a>';
         } elseif ($superfrete_status == 'pending') {
 
             echo '<p>' . esc_html__('Status da Etiqueta: ', 'superfrete') . ' <strong>' . esc_html__('Pendente Pagamento', 'superfrete') . '</strong></p>';
-            if ($saldo < $valor_frete) {
+            if ($limit_reached) {
+                // Don't offer payment when shipment limit has been reached — paying won't unlock the label.
+            } elseif ($saldo < $valor_frete) {
                 $web_url = $this->get_superfrete_web_url();
                 echo '<a href="' . esc_url($web_url . '/#/account/credits') . '" target="_blank" class="button button-primary">' . esc_html__('Adicionar Saldo', 'superfrete') . '</a>';
                 echo '<p style="color: red;">' . esc_html__('Saldo insuficiente para pagamento da etiqueta.', 'superfrete') . '</p>';
@@ -216,13 +235,16 @@ class SuperFrete_OrderActions
     }
 
     /**
-     * Obtém o saldo do usuário na SuperFrete
+     * Obtém o saldo e limites do usuário na SuperFrete
      */
-    private function get_superfrete_balance()
+    private function get_superfrete_user_info()
     {
         $request = new Request();
         $response = $request->call_superfrete_api('/api/v0/user', 'GET', [], true);
-        return isset($response['balance']) ? floatval($response['balance']) : 0;
+        return [
+            'balance' => isset($response['balance']) ? floatval($response['balance']) : 0,
+            'limits' => isset($response['limits']) ? $response['limits'] : null,
+        ];
     }
 
     /**

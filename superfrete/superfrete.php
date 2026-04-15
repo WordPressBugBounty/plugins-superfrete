@@ -2,7 +2,7 @@
 /*
   Plugin Name: SuperFrete
   Description: Plugin that provides integration with the SuperFrete platform.
-  Version:     3.3.3
+  Version:     3.3.4
   Author:      Super Frete
   Author URI:  https://superfrete.com/
   Text Domain: superfrete
